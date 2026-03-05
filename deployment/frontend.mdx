@@ -61,6 +61,7 @@ Create `.env.local` in the frontend directory:
 
 ```bash .env.local
 NEXT_PUBLIC_API_URL=http://localhost:8080
+NEXT_PUBLIC_WS_URL=ws://localhost:8080
 ```
 
 <Note>
@@ -71,10 +72,11 @@ NEXT_PUBLIC_API_URL=http://localhost:8080
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
-| `NEXT_PUBLIC_API_URL` | Backend API URL | `http://localhost:8080` | Yes |
+| `NEXT_PUBLIC_API_URL` | Backend REST API URL | `http://localhost:8080` | Yes |
+| `NEXT_PUBLIC_WS_URL` | WebSocket server URL | `ws://localhost:8080` | Yes |
 
 <Warning>
-  Update `NEXT_PUBLIC_API_URL` to point to your production backend URL.
+  Update both URLs to point to your production backend. Use `wss://` (secure WebSocket) in production.
 </Warning>
 
 ### Production Configuration
@@ -83,6 +85,7 @@ For production deployment:
 
 ```bash .env.production
 NEXT_PUBLIC_API_URL=https://api.yourdomain.com
+NEXT_PUBLIC_WS_URL=wss://api.yourdomain.com
 ```
 
 ## Development Server

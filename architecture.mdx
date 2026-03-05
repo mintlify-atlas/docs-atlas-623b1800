@@ -53,7 +53,7 @@ The backend follows Robert C. Martin's Clean Architecture with four distinct lay
 
 ### Layer Diagram
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │                     PRESENTATION LAYER                              │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────┐ │
@@ -704,7 +704,7 @@ POST /api/v1/surgeries/{id}/analysis      # Submit AI analysis
 
 #### Simulation Stream (Surgeons)
 
-```
+```text
 ws://backend:8080/ws/simulation?token=<JWT>
 ```
 
@@ -727,7 +727,7 @@ ws://backend:8080/ws/simulation?token=<JWT>
 
 #### AI Notification Channel
 
-```
+```text
 ws://backend:8080/ws/ai?token=<JWT>
 ```
 
@@ -892,7 +892,7 @@ List<SurgerySession> pending = surgeryRepository
 
 ### Development
 
-```
+```text
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
 │  Frontend   │────▶│   Backend   │────▶│  H2 Memory  │
 │  :3000      │     │   :8080     │     │  Database   │
@@ -907,7 +907,7 @@ List<SurgerySession> pending = surgeryRepository
 
 ### Production (Docker)
 
-```
+```text
 ┌─────────────────────────────────────────────────────────┐
 │                     Docker Compose                      │
 │                                                         │
