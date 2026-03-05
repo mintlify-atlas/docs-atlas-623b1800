@@ -1,0 +1,592 @@
+---
+title: 'AI WebSocket Channel'
+description: 'Real-time surgery completion notifications via /ws/ai endpoint'
+---
+
+## Overview
+
+The `/ws/ai` WebSocket channel provides real-time notifications to AI analysis systems when surgeons complete surgical simulations. This enables immediate AI processing and feedback generation without polling the REST API.
+
+## Connection
+
+### Endpoint
+
+```
+ws://localhost:8080/ws/ai?token=<jwt-token>
+```
+
+### Authentication
+
+<Warning>
+Requires a valid JWT token with **ROLE_AI** (or **ROLE_IA**). Surgeon accounts cannot connect to this channel.
+</Warning>
+
+### Connection Example
+
+<CodeGroup>
+
+```javascript JavaScript/TypeScript
+const aiToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...';
+const ws = new WebSocket(`ws://localhost:8080/ws/ai?token=${aiToken}`);
+
+ws.onopen = () => {
+  console.log('🤖 AI system connected');
+};
+
+ws.onmessage = (event) => {
+  const notification = JSON.parse(event.data);
+  console.log('🔔 Received notification:', notification);
+  
+  if (notification.event === 'NEW_SURGERY') {
+    handleNewSurgery(notification.surgeryId);
+  }
+};
+
+ws.onerror = (error) => {
+  console.error('❌ WebSocket error:', error);
+};
+
+ws.onclose = (event) => {
+  console.log(`🔌 Disconnected: ${event.code}`);
+};
+```
+
+```python Python
+import websocket
+import json
+
+ai_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+def on_open(ws):
+    print("🤖 AI system connected")
+
+def on_message(ws, message):
+    notification = json.loads(message)
+    print(f"🔔 Received notification: {notification}")
+    
+    if notification.get('event') == 'NEW_SURGERY':
+        surgery_id = notification['surgeryId']
+        handle_new_surgery(surgery_id)
+
+def on_error(ws, error):
+    print(f"❌ WebSocket error: {error}")
+
+def on_close(ws, close_status_code, close_msg):
+    print(f"🔌 Disconnected: {close_status_code}")
+
+ws = websocket.WebSocketApp(
+    f"ws://localhost:8080/ws/ai?token={ai_token}",
+    on_open=on_open,
+    on_message=on_message,
+    on_error=on_error,
+    on_close=on_close
+)
+
+ws.run_forever()
+```
+
+```java Java
+import org.java_websocket.client.WebSocketClient;
+import org.java_websocket.handshake.ServerHandshake;
+import org.json.JSONObject;
+import java.net.URI;
+
+String aiToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...";
+URI uri = new URI("ws://localhost:8080/ws/ai?token=" + aiToken);
+
+WebSocketClient client = new WebSocketClient(uri) {
+    @Override
+    public void onOpen(ServerHandshake handshake) {
+        System.out.println("🤖 AI system connected");
+    }
+
+    @Override
+    public void onMessage(String message) {
+        JSONObject notification = new JSONObject(message);
+        System.out.println("🔔 Received notification: " + notification);
+        
+        if (notification.getString("event").equals("NEW_SURGERY")) {
+            String surgeryId = notification.getString("surgeryId");
+            handleNewSurgery(surgeryId);
+        }
+    }
+
+    @Override
+    public void onClose(int code, String reason, boolean remote) {
+        System.out.println("🔌 Disconnected: " + code);
+    }
+
+    @Override
+    public void onError(Exception ex) {
+        System.err.println("❌ WebSocket error: " + ex.getMessage());
+    }
+};
+
+client.connect();
+```
+
+</CodeGroup>
+
+## Message Protocol
+
+### Server → Client: Connection Confirmation
+
+Immediately after successful connection, the server sends a confirmation message:
+
+<ResponseField name="status" type="string">
+  Connection status, always `"connected"`
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Confirmation message
+</ResponseField>
+
+```json Connection Confirmation
+{
+  "status": "connected",
+  "message": "IA conectada exitosamente"
+}
+```
+
+### Server → Client: Surgery Notification
+
+When a surgeon completes a simulation (sends FINISH event), the AI channel receives:
+
+<ResponseField name="event" type="string">
+  Event type, always `"NEW_SURGERY"`
+</ResponseField>
+
+<ResponseField name="surgeryId" type="UUID">
+  Unique identifier of the completed surgery
+</ResponseField>
+
+```json New Surgery Notification
+{
+  "event": "NEW_SURGERY",
+  "surgeryId": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+### Client → Server: Optional Messages
+
+AI systems can send messages to the server (currently for logging/debugging):
+
+```javascript
+// Send acknowledgment (optional)
+ws.send(JSON.stringify({
+  "status": "PROCESSING",
+  "surgeryId": "550e8400-e29b-41d4-a716-446655440000"
+}));
+```
+
+<Note>
+The backend logs client messages but does not process them. This feature is reserved for future bidirectional communication.
+</Note>
+
+## Complete AI Workflow
+
+<Steps>
+  <Step title="AI System Connects">
+    Establish persistent WebSocket connection with ROLE_AI token
+  </Step>
+  <Step title="Receive Confirmation">
+    Server confirms connection with `connected` status message
+  </Step>
+  <Step title="Wait for Notifications">
+    Listen for `NEW_SURGERY` events (blocking/event-driven)
+  </Step>
+  <Step title="Fetch Trajectory">
+    On notification, call REST API: `GET /api/v1/surgeries/{id}/trajectory`
+  </Step>
+  <Step title="Analyze Surgery">
+    Process trajectory data:
+    - Calculate performance metrics
+    - Detect errors (tumor touches, hemorrhages)
+    - Evaluate movement smoothness
+    - Generate textual feedback
+  </Step>
+  <Step title="Submit Analysis">
+    Call REST API: `POST /api/v1/surgeries/{id}/analysis`
+  </Step>
+  <Step title="Continue Listening">
+    Return to waiting for next NEW_SURGERY notification
+  </Step>
+</Steps>
+
+### Full Implementation Example
+
+<CodeGroup>
+
+```javascript JavaScript/TypeScript
+import axios from 'axios';
+
+class AIAnalysisSystem {
+  constructor(aiToken, apiBaseUrl) {
+    this.token = aiToken;
+    this.apiBaseUrl = apiBaseUrl;
+    this.ws = null;
+  }
+
+  connect() {
+    this.ws = new WebSocket(`ws://localhost:8080/ws/ai?token=${this.token}`);
+
+    this.ws.onopen = () => {
+      console.log('🤖 AI system connected and ready');
+    };
+
+    this.ws.onmessage = async (event) => {
+      const notification = JSON.parse(event.data);
+
+      // Handle connection confirmation
+      if (notification.status === 'connected') {
+        console.log('✅', notification.message);
+        return;
+      }
+
+      // Handle new surgery notification
+      if (notification.event === 'NEW_SURGERY') {
+        console.log(`🔔 New surgery: ${notification.surgeryId}`);
+        await this.processSurgery(notification.surgeryId);
+      }
+    };
+
+    this.ws.onerror = (error) => {
+      console.error('❌ WebSocket error:', error);
+    };
+
+    this.ws.onclose = (event) => {
+      console.log('🔌 Disconnected, reconnecting in 5s...');
+      setTimeout(() => this.connect(), 5000);
+    };
+  }
+
+  async processSurgery(surgeryId) {
+    try {
+      // 1. Fetch trajectory data
+      console.log(`📥 Fetching trajectory for ${surgeryId}`);
+      const response = await axios.get(
+        `${this.apiBaseUrl}/surgeries/${surgeryId}/trajectory`,
+        {
+          headers: { Authorization: `Bearer ${this.token}` }
+        }
+      );
+
+      const trajectory = response.data;
+
+      // 2. Analyze the surgery
+      console.log(`🧠 Analyzing ${trajectory.movements.length} movements...`);
+      const analysis = this.analyzeSurgery(trajectory);
+
+      // 3. Submit analysis
+      console.log(`📤 Submitting analysis (score: ${analysis.score})`);
+      await axios.post(
+        `${this.apiBaseUrl}/surgeries/${surgeryId}/analysis`,
+        analysis,
+        {
+          headers: { Authorization: `Bearer ${this.token}` }
+        }
+      );
+
+      console.log(`✅ Analysis complete for ${surgeryId}`);
+    } catch (error) {
+      console.error(`❌ Error processing surgery ${surgeryId}:`, error.message);
+    }
+  }
+
+  analyzeSurgery(trajectory) {
+    // Simple scoring algorithm (replace with actual AI model)
+    const movements = trajectory.movements;
+    const duration = new Date(trajectory.endTime) - new Date(trajectory.startTime);
+    const durationMinutes = duration / 60000;
+
+    // Count events
+    const tumorTouches = movements.filter(m => m.event === 'TUMOR_TOUCH').length;
+    const hemorrhages = movements.filter(m => m.event === 'HEMORRHAGE').length;
+
+    // Calculate score (0-100)
+    let score = 100;
+    score -= tumorTouches * 10; // -10 per tumor touch
+    score -= hemorrhages * 20;   // -20 per hemorrhage
+    score -= Math.max(0, durationMinutes - 15) * 2; // -2 per minute over 15
+    score = Math.max(0, Math.min(100, score));
+
+    // Generate feedback
+    const feedback = `
+      Surgery completed in ${durationMinutes.toFixed(1)} minutes.
+      Tumor contacts: ${tumorTouches}
+      Hemorrhage events: ${hemorrhages}
+      
+      ${score >= 90 ? 'Excellent performance!' : ''}
+      ${score >= 70 && score < 90 ? 'Good performance with room for improvement.' : ''}
+      ${score < 70 ? 'Practice recommended to improve precision and speed.' : ''}
+      
+      ${tumorTouches > 0 ? 'Minimize tumor contact to prevent spread.' : ''}
+      ${hemorrhages > 0 ? 'Focus on vascular control techniques.' : ''}
+    `.trim();
+
+    return { score, feedback };
+  }
+}
+
+// Usage
+const aiSystem = new AIAnalysisSystem(
+  'your-ai-jwt-token',
+  'http://localhost:8080/api/v1'
+);
+aiSystem.connect();
+```
+
+```python Python
+import websocket
+import requests
+import json
+import time
+from datetime import datetime
+
+class AIAnalysisSystem:
+    def __init__(self, ai_token, api_base_url):
+        self.token = ai_token
+        self.api_base_url = api_base_url
+        self.ws = None
+
+    def on_open(self, ws):
+        print("🤖 AI system connected and ready")
+
+    def on_message(self, ws, message):
+        notification = json.loads(message)
+
+        # Handle connection confirmation
+        if notification.get('status') == 'connected':
+            print(f"✅ {notification['message']}")
+            return
+
+        # Handle new surgery notification
+        if notification.get('event') == 'NEW_SURGERY':
+            surgery_id = notification['surgeryId']
+            print(f"🔔 New surgery: {surgery_id}")
+            self.process_surgery(surgery_id)
+
+    def on_error(self, ws, error):
+        print(f"❌ WebSocket error: {error}")
+
+    def on_close(self, ws, close_status_code, close_msg):
+        print("🔌 Disconnected, reconnecting in 5s...")
+        time.sleep(5)
+        self.connect()
+
+    def connect(self):
+        self.ws = websocket.WebSocketApp(
+            f"ws://localhost:8080/ws/ai?token={self.token}",
+            on_open=self.on_open,
+            on_message=self.on_message,
+            on_error=self.on_error,
+            on_close=self.on_close
+        )
+        self.ws.run_forever()
+
+    def process_surgery(self, surgery_id):
+        try:
+            # 1. Fetch trajectory data
+            print(f"📥 Fetching trajectory for {surgery_id}")
+            headers = {'Authorization': f'Bearer {self.token}'}
+            response = requests.get(
+                f"{self.api_base_url}/surgeries/{surgery_id}/trajectory",
+                headers=headers
+            )
+            trajectory = response.json()
+
+            # 2. Analyze the surgery
+            print(f"🧠 Analyzing {len(trajectory['movements'])} movements...")
+            analysis = self.analyze_surgery(trajectory)
+
+            # 3. Submit analysis
+            print(f"📤 Submitting analysis (score: {analysis['score']})")
+            requests.post(
+                f"{self.api_base_url}/surgeries/{surgery_id}/analysis",
+                json=analysis,
+                headers=headers
+            )
+
+            print(f"✅ Analysis complete for {surgery_id}")
+        except Exception as e:
+            print(f"❌ Error processing surgery {surgery_id}: {e}")
+
+    def analyze_surgery(self, trajectory):
+        movements = trajectory['movements']
+        start_time = datetime.fromisoformat(trajectory['startTime'])
+        end_time = datetime.fromisoformat(trajectory['endTime'])
+        duration_minutes = (end_time - start_time).total_seconds() / 60
+
+        # Count events
+        tumor_touches = sum(1 for m in movements if m['event'] == 'TUMOR_TOUCH')
+        hemorrhages = sum(1 for m in movements if m['event'] == 'HEMORRHAGE')
+
+        # Calculate score
+        score = 100
+        score -= tumor_touches * 10
+        score -= hemorrhages * 20
+        score -= max(0, duration_minutes - 15) * 2
+        score = max(0, min(100, score))
+
+        # Generate feedback
+        feedback = f"""
+Surgery completed in {duration_minutes:.1f} minutes.
+Tumor contacts: {tumor_touches}
+Hemorrhage events: {hemorrhages}
+
+{'Excellent performance!' if score >= 90 else ''}
+{'Good performance with room for improvement.' if 70 <= score < 90 else ''}
+{'Practice recommended to improve precision and speed.' if score < 70 else ''}
+
+{'Minimize tumor contact to prevent spread.' if tumor_touches > 0 else ''}
+{'Focus on vascular control techniques.' if hemorrhages > 0 else ''}
+        """.strip()
+
+        return {'score': score, 'feedback': feedback}
+
+# Usage
+ai_system = AIAnalysisSystem(
+    'your-ai-jwt-token',
+    'http://localhost:8080/api/v1'
+)
+ai_system.connect()
+```
+
+</CodeGroup>
+
+## Error Handling
+
+### Authentication Errors
+
+Invalid token or wrong role results in immediate disconnection:
+
+```javascript
+ws.onclose = (event) => {
+  if (event.code === 1008) {
+    console.error('❌ Authentication failed: ROLE_AI token required');
+    // AI token may have expired, refresh and reconnect
+  }
+};
+```
+
+### Reconnection Strategy
+
+Implement automatic reconnection with exponential backoff:
+
+```javascript
+class AIWebSocketClient {
+  constructor(token) {
+    this.token = token;
+    this.reconnectDelay = 1000;
+    this.maxReconnectDelay = 30000;
+  }
+
+  connect() {
+    this.ws = new WebSocket(`ws://localhost:8080/ws/ai?token=${this.token}`);
+
+    this.ws.onopen = () => {
+      console.log('✅ Connected');
+      this.reconnectDelay = 1000; // Reset delay on success
+    };
+
+    this.ws.onclose = () => {
+      console.log(`🔄 Reconnecting in ${this.reconnectDelay / 1000}s...`);
+      setTimeout(() => this.connect(), this.reconnectDelay);
+      
+      // Exponential backoff
+      this.reconnectDelay = Math.min(
+        this.reconnectDelay * 2,
+        this.maxReconnectDelay
+      );
+    };
+  }
+}
+```
+
+## Backend Implementation
+
+The AI channel handler (`AIWebSocketHandler.java`) performs:
+
+<Steps>
+  <Step title="Validate Role">
+    Check that connecting user has `ROLE_AI`
+  </Step>
+  <Step title="Register Session">
+    Add WebSocket session to active AI sessions map
+  </Step>
+  <Step title="Send Confirmation">
+    Send connection confirmation message
+  </Step>
+  <Step title="Listen for Notifications">
+    Static method `notificarNuevaCirugia()` broadcasts to all AI sessions
+  </Step>
+  <Step title="Handle Disconnection">
+    Remove session from map on close
+  </Step>
+</Steps>
+
+### Notification Trigger
+
+Notifications are sent from `SimulationWebSocketHandler.java` when a surgery finishes:
+
+```java
+// When FINISH event is received:
+if (movement.event() == SurgeryEvent.FINISH) {
+    surgery.endSurgery();
+    surgeryRepository.save(surgery);
+    activeSessions.remove(session.getId());
+
+    // Send confirmation to surgeon
+    String response = String.format(
+        "{\"status\":\"SAVED\", \"surgeryId\":\"%s\"}",
+        surgery.getId()
+    );
+    session.sendMessage(new TextMessage(response));
+
+    // Notify all connected AI systems
+    AIWebSocketHandler.notificarNuevaCirugia(surgery.getId());
+}
+```
+
+## Multi-AI Support
+
+The channel supports multiple concurrent AI connections:
+
+- All connected AI systems receive notifications
+- Each AI can process surgeries independently
+- Useful for:
+  - Load balancing across AI instances
+  - Running multiple AI models simultaneously
+  - Development/staging environments
+
+<Note>
+If multiple AI systems submit analysis for the same surgery, the last submission overwrites previous results.
+</Note>
+
+## Performance Considerations
+
+### Notification Latency
+
+Notifications are sent immediately after surgery persistence:
+- Typical latency: < 100ms
+- No polling delay
+- Synchronous broadcast to all AI sessions
+
+### Connection Stability
+
+Recommendations for production:
+- Implement heartbeat/ping mechanism
+- Monitor connection health
+- Log all notifications for audit trail
+- Handle temporary network interruptions gracefully
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Surgery Endpoints" icon="database" href="/api/surgery-endpoints">
+    Fetch trajectory data and submit AI analysis
+  </Card>
+  <Card title="Simulation Channel" icon="wave-pulse" href="/api/simulation-channel">
+    Learn how surgeons stream telemetry data
+  </Card>
+</CardGroup>

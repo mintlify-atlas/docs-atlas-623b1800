@@ -1,0 +1,445 @@
+---
+title: Dashboard
+description: Overview of the Justina dashboard interface and its key modules
+---
+
+## Overview
+
+The Justina dashboard is your central hub for accessing all platform features. After logging in, you'll land on the dashboard where you can start simulations, view reports, analyze performance data, and configure system settings.
+
+## Accessing the Dashboard
+
+After successful authentication, you're automatically redirected to:
+
+```
+/dashboard?username={your-username}
+```
+
+The dashboard is a server-rendered Next.js page with dynamic user context.
+
+## Dashboard Layout
+
+### Header Section
+
+The dashboard greets you with a personalized header:
+
+```tsx
+<div className="mb-12">
+  <h1 className="mb-2 font-bold text-3xl">Bienvenido a RoboSim</h1>
+  <p className="text-slate-600 text-lg">
+    Selecciona un módulo para comenzar
+  </p>
+</div>
+```
+
+### System Status Banner
+
+A blue informational banner displays system availability:
+
+```tsx
+<div className="bg-blue-50 mb-8 p-6 border border-blue-200 rounded-lg">
+  <div className="flex gap-4">
+    <div className="bg-blue-600 p-2 rounded-full">
+      <Activity className="size-5 text-white" />
+    </div>
+    <div>
+      <h3 className="font-semibold text-blue-900">
+        Sistema Operativo
+      </h3>
+      <p className="text-blue-800">
+        Todos los módulos están disponibles.
+      </p>
+    </div>
+  </div>
+</div>
+```
+
+### Navigation Bar
+
+The persistent navigation bar (Navbar component) provides:
+- Quick links to key pages
+- User profile information
+- Logout functionality
+
+## Available Modules
+
+The dashboard displays four primary modules in a 2-column grid:
+
+```tsx
+<div className="gap-6 grid md:grid-cols-2 mb-12">
+  {modules.map((module) => (
+    <ModuleCard key={module.id} {...module} />
+  ))}
+</div>
+```
+
+### Module Configuration
+
+Modules are defined in `module.data.ts`:
+
+```typescript
+import { Play, FileText, Settings, BarChart3 } from "lucide-react";
+import { Module } from "../types/module";
+
+export const modules: Module[] = [
+  {
+    id: "simulator",
+    title: "Nueva Simulación",
+    description: "Inicia una nueva simulación de procedimiento quirúrgico robótico",
+    icon: Play,
+    color: "blue",
+    available: true,
+  },
+  {
+    id: "reports",
+    title: "Reportes",
+    description: "Visualiza y analiza los resultados de simulaciones anteriores",
+    icon: FileText,
+    color: "green",
+    available: true,
+  },
+  {
+    id: "analytics",
+    title: "Análisis de Datos",
+    description: "Métricas y estadísticas de rendimiento de los robots",
+    icon: BarChart3,
+    color: "purple",
+    available: true,
+  },
+  {
+    id: "config",
+    title: "Configuración",
+    description: "Ajusta parámetros de simulación y configuración del sistema",
+    icon: Settings,
+    color: "amber",
+    available: true,
+  },
+];
+```
+
+## Module Descriptions
+
+<CardGroup cols={2}>
+  <Card title="Nueva Simulación" icon="play" color="#3b82f6">
+    Launch a new robotic surgical simulation in an interactive 3D environment.
+
+    **Features:**
+    - Real-time 3D surgical scene
+    - WebSocket-based telemetry streaming
+    - Live coordinate tracking
+    - Immediate AI feedback
+
+    **Navigation:** `/simulator`
+  </Card>
+
+  <Card title="Reportes" icon="file-text" color="#22c55e">
+    Access and analyze historical simulation results.
+
+    **Features:**
+    - List of completed surgeries
+    - Detailed trajectory visualization
+    - AI scores and feedback
+    - Performance summaries
+
+    **Navigation:** `/reports` (planned)
+  </Card>
+
+  <Card title="Análisis de Datos" icon="bar-chart" color="#a855f7">
+    View aggregate performance metrics and trends.
+
+    **Features:**
+    - Performance graphs over time
+    - Average scores and trends
+    - Error pattern analysis
+    - Comparative statistics
+
+    **Navigation:** `/analytics` (planned)
+  </Card>
+
+  <Card title="Configuración" icon="settings" color="#f59e0b">
+    Customize simulation parameters and system settings.
+
+    **Features:**
+    - Simulation difficulty adjustment
+    - Visual/audio preferences
+    - Account management
+    - System diagnostics
+
+    **Navigation:** `/config` (planned)
+  </Card>
+</CardGroup>
+
+## Module Interaction
+
+Each module is rendered as a clickable card:
+
+```tsx
+export function ModuleCard({ id, title, description, icon: Icon, color, available }: Module) {
+  return (
+    <Card className="hover:shadow-lg transition-shadow cursor-pointer">
+      <div className="p-6">
+        <div className={`bg-${color}-100 p-3 rounded-full inline-block mb-4`}>
+          <Icon className={`size-6 text-${color}-600`} />
+        </div>
+        <h3 className="font-semibold text-xl mb-2">{title}</h3>
+        <p className="text-slate-600 mb-4">{description}</p>
+        {available ? (
+          <Badge variant="success">Disponible</Badge>
+        ) : (
+          <Badge variant="secondary">Próximamente</Badge>
+        )}
+      </div>
+    </Card>
+  );
+}
+```
+
+## Platform Information Panel
+
+At the bottom of the dashboard, an informational card provides context:
+
+```tsx
+<Card className="bg-slate-50 p-6">
+  <h3 className="mb-4 font-semibold">Acerca de la Plataforma</h3>
+  <p className="text-slate-700">
+    RoboSim permite simular procedimientos quirúrgicos y validar
+    decisiones antes de construir hardware costoso.
+  </p>
+</Card>
+```
+
+## User Context Management
+
+The dashboard uses a client-side hydration component to manage user state:
+
+```tsx
+// UserHydrator.tsx
+export default function UserHydrator() {
+  const searchParams = useSearchParams();
+  const username = searchParams.get('username');
+  
+  useEffect(() => {
+    if (username) {
+      // Store user context in global state
+      setUser({ username });
+    }
+  }, [username]);
+
+  return null;
+}
+```
+
+This is included in the dashboard page:
+
+```tsx
+<Suspense fallback={null}>
+  <UserHydrator />
+</Suspense>
+```
+
+## Navigation Patterns
+
+### Typical User Journey
+
+<Steps>
+  <Step title="Login">
+    User authenticates at `/login`
+  </Step>
+
+  <Step title="Dashboard Landing">
+    Redirected to `/dashboard?username={user}` after successful login
+  </Step>
+
+  <Step title="Module Selection">
+    User clicks on a module card (e.g., "Nueva Simulación")
+  </Step>
+
+  <Step title="Module Interaction">
+    User performs actions within the module (e.g., runs simulation)
+  </Step>
+
+  <Step title="Return to Dashboard">
+    User navigates back to dashboard via Navbar or footer links
+  </Step>
+</Steps>
+
+### Footer Navigation
+
+The dashboard includes a persistent footer with:
+- Copyright information
+- Quick links to documentation
+- Support contact information
+
+```tsx
+<Footer />
+```
+
+## Responsive Design
+
+The dashboard is fully responsive:
+
+**Desktop (md and above):**
+- 2-column grid for module cards
+- Expanded sidebar navigation
+- Full-width information panels
+
+**Mobile:**
+- Single-column stacked layout
+- Collapsed navigation menu
+- Touch-optimized cards
+
+```tsx
+<div className="gap-6 grid md:grid-cols-2 mb-12">
+  {/* Automatically stacks on mobile */}
+</div>
+```
+
+## Dynamic Status Indicators
+
+Modules display availability status:
+
+```typescript
+available: true  // Module is active and accessible
+available: false // Module is coming soon (badge: "Próximamente")
+```
+
+This allows for phased feature rollout without modifying the dashboard layout.
+
+## Performance Optimization
+
+### Dynamic Rendering
+
+The dashboard uses Next.js dynamic rendering:
+
+```tsx
+export const dynamic = "force-dynamic";
+```
+
+This ensures user-specific content is always fresh and not cached.
+
+### Component Lazy Loading
+
+Large module components are lazy-loaded:
+
+```tsx
+import { Suspense } from "react";
+
+<Suspense fallback={<LoadingSpinner />}>
+  <ModuleCard {...props} />
+</Suspense>
+```
+
+## Security Considerations
+
+<Warning>
+  The dashboard requires authentication. Attempting to access `/dashboard` without a valid JWT token will redirect to `/login`.
+</Warning>
+
+### Protected Route Implementation
+
+```typescript
+// Middleware or component-level check
+if (!isAuthenticated) {
+  redirect('/login');
+}
+```
+
+### Role-Based Module Access
+
+Future enhancement: Modules can be conditionally displayed based on user role:
+
+```typescript
+const visibleModules = modules.filter(module => {
+  if (module.id === 'analytics' && userRole !== 'ROLE_SURGEON') {
+    return false;
+  }
+  return true;
+});
+```
+
+## Customization
+
+Administrators can customize the dashboard by modifying `module.data.ts`:
+
+**Adding a new module:**
+```typescript
+{
+  id: "training",
+  title: "Entrenamiento",
+  description: "Módulos de capacitación interactivos",
+  icon: GraduationCap,
+  color: "indigo",
+  available: false,  // Coming soon
+}
+```
+
+**Changing module order:**
+Simply reorder items in the `modules` array.
+
+## Accessibility
+
+The dashboard implements accessibility best practices:
+
+- **Semantic HTML**: Proper heading hierarchy (h1, h2, h3)
+- **ARIA labels**: Screen reader support for interactive elements
+- **Keyboard navigation**: All modules accessible via Tab key
+- **Color contrast**: WCAG AA compliant text/background ratios
+
+## Troubleshooting
+
+### Dashboard Not Loading
+
+**Issue**: Blank screen after login
+
+**Solutions**:
+- Clear browser cache and cookies
+- Check browser console for JavaScript errors
+- Verify JWT token in cookies (DevTools > Application > Cookies)
+- Ensure backend API is accessible
+
+### Module Cards Not Clickable
+
+**Issue**: Clicking module cards has no effect
+
+**Solutions**:
+- Check that `available: true` in module configuration
+- Verify routing is configured for the module path
+- Inspect browser console for navigation errors
+
+### User Context Lost
+
+**Issue**: Username not displayed or state resets
+
+**Solutions**:
+- Verify `UserHydrator` component is mounted
+- Check that URL contains `?username=` parameter
+- Review global state management (Zustand/Redux store)
+
+## Best Practices
+
+<Note>
+  - **Start with New Simulation** to familiarize yourself with the platform
+  - **Check Reports regularly** to track your progress
+  - **Use Analytics** to identify improvement areas
+  - **Review Configuration** to optimize your experience
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Run Simulations" icon="play" href="/guide/running-simulations">
+    Start your first surgical simulation
+  </Card>
+
+  <Card title="View Results" icon="chart-line" href="/guide/viewing-results">
+    Learn how to interpret AI feedback
+  </Card>
+
+  <Card title="Authentication" icon="lock" href="/guide/authentication">
+    Understand security and user management
+  </Card>
+
+  <Card title="API Reference" icon="code" href="/api-reference">
+    Explore backend API endpoints
+  </Card>
+</CardGroup>

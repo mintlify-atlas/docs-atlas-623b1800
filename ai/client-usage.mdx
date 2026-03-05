@@ -1,0 +1,416 @@
+---
+title: "AI Client Usage"
+description: "Using the JustinaAIClient class to integrate with the backend"
+---
+
+The `JustinaAIClient` class provides a high-level Python interface for interacting with the Justina backend API. It handles authentication, trajectory fetching, and analysis submission.
+
+## Class Overview
+
+The client manages the complete workflow:
+
+1. **Authentication** - Login and JWT token management
+2. **Trajectory Retrieval** - Fetch movement data for completed surgeries
+3. **Analysis Submission** - Send AI-generated scores and feedback back to the backend
+
+## Basic Usage
+
+```python
+from client import JustinaAIClient
+from analysis_pipeline import run_pipeline
+
+# Initialize client
+client = JustinaAIClient()
+
+# Authenticate
+if not client.login():
+    print("Login failed!")
+    exit(1)
+
+# Fetch trajectory data
+surgery_id = "550e8400-e29b-41d4-a716-446655440000"
+trajectory = client.get_trajectory(surgery_id)
+
+if trajectory:
+    # Run analysis
+    score, feedback = run_pipeline(trajectory)
+    
+    # Submit results
+    client.send_analysis(surgery_id, score, feedback)
+```
+
+## Class Reference
+
+### Constructor
+
+```python
+client = JustinaAIClient()
+```
+
+Initializes a new client instance. Reads configuration from `config.py`:
+
+- `BASE_URL`: Backend API URL (default: `http://localhost:8080`)
+- `IA_USERNAME`: AI service username (default: `ia_justina`)
+- `IA_PASSWORD`: AI service password (default: `ia_secret_2024`)
+
+<Note>
+The constructor doesn't perform authentication. Call `login()` explicitly to authenticate.
+</Note>
+
+### Methods
+
+#### `login() -> bool`
+
+Authenticates with the backend and obtains a JWT token.
+
+**Returns**: `True` if login successful, `False` otherwise
+
+**Example**:
+
+```python
+if client.login():
+    print("✅ Authenticated successfully")
+else:
+    print("❌ Authentication failed")
+```
+
+**Implementation Details**:
+
+```python client.py lines
+def login(self):
+    url = f"{self.base_url}/api/v1/auth/login"
+    payload = {
+        "username": IA_USERNAME,
+        "password": IA_PASSWORD
+    }
+
+    print(f"📝 Iniciando login como IA en {self.base_url}...")
+    try:
+        response = requests.post(url, json=payload, timeout=REQUEST_TIMEOUT)
+        if response.status_code != 200:
+            print(f"❌ Error en login: {response.status_code}")
+            return False
+
+        data = response.json()
+        self.token = response.cookies.get("jwt-token")
+        
+        # Fallback en caso de que aún venga en el JSON
+        if not self.token:
+            self.token = data.get("token")
+            
+        if not self.token:
+            print("❌ No se encontró el token de autenticación en la respuesta")
+            return False
+            
+        self.token_expiration = time.time() + (60 * 60 * 24)
+        print("✅ Login exitoso")
+        return True
+    except Exception as e:
+        print(f"❌ Error de conexión: {e}")
+        return False
+```
+
+<Warning>
+The token is stored as an HttpOnly cookie and also extracted from the JSON response as a fallback. It expires after 24 hours.
+</Warning>
+
+#### `ensure_authenticated() -> bool`
+
+Checks if the client is authenticated and re-authenticates if needed.
+
+**Returns**: `True` if authenticated, `False` if authentication failed
+
+**Example**:
+
+```python
+if client.ensure_authenticated():
+    # Proceed with API calls
+    pass
+```
+
+**Use Case**: Call before each API request to guarantee valid authentication.
+
+#### `get_trajectory(surgery_id: str) -> Dict | None`
+
+Fetches movement trajectory data for a completed surgery.
+
+**Parameters**:
+- `surgery_id` (str): UUID of the surgery session
+
+**Returns**: Dictionary containing trajectory data, or `None` if surgery not found or error occurred
+
+**Example**:
+
+```python
+trajectory = client.get_trajectory("550e8400-e29b-41d4-a716-446655440000")
+
+if trajectory:
+    print(f"Found {len(trajectory['movements'])} movements")
+    print(f"Surgeon: {trajectory['surgeonUsername']}")
+    print(f"Duration: {trajectory['endTime'] - trajectory['startTime']} ms")
+else:
+    print("Trajectory not found or error occurred")
+```
+
+**Response Structure**:
+
+```json
+{
+  "surgeryId": "550e8400-e29b-41d4-a716-446655440000",
+  "surgeonUsername": "surgeon_master",
+  "startTime": 1710523456789,
+  "endTime": 1710523756789,
+  "movements": [
+    {
+      "coordinates": [10.5, 20.3, 15.7],
+      "event": "START",
+      "timestamp": 1710523456789
+    }
+  ]
+}
+```
+
+#### `send_analysis(surgery_id: str, score: float, feedback: str) -> bool`
+
+Submits AI analysis results to the backend.
+
+**Parameters**:
+- `surgery_id` (str): UUID of the surgery session
+- `score` (float): Numerical score (0.0 - 100.0)
+- `feedback` (str): Markdown-formatted feedback text
+
+**Returns**: `True` if submission successful, `False` otherwise
+
+**Example**:
+
+```python
+score = 85.5
+feedback = """### ✅ BUENO - Score: 85.5/100
+
+#### 🚨 ALERTAS CRÍTICAS
+- Hemorragias: 0 (Ninguna)
+- Contactos Tumor: 1
+"""
+
+success = client.send_analysis(surgery_id, score, feedback)
+if success:
+    print("✅ Analysis submitted successfully")
+```
+
+**Implementation**:
+
+```python client.py lines
+def send_analysis(self, surgery_id, score, feedback):
+    if not self.ensure_authenticated():
+        return False
+
+    url = f"{self.base_url}/api/v1/surgeries/{surgery_id}/analysis"
+    headers = {
+        "Authorization": f"Bearer {self.token}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "score": float(score),
+        "feedback": feedback
+    }
+
+    print(f"📤 Enviando análisis para cirugía {surgery_id}...")
+    try:
+        response = requests.post(url, json=payload, headers=headers, timeout=REQUEST_TIMEOUT)
+        if response.status_code == 204:
+            print("✅ Análisis enviado correctamente")
+            return True
+        else:
+            print(f"❌ Error enviando análisis: {response.status_code} - {response.text}")
+            return False
+    except Exception as e:
+        print(f"❌ Error de red al enviar análisis: {e}")
+        return False
+```
+
+<Note>
+A 204 No Content response indicates successful submission.
+</Note>
+
+## Complete Workflow Example
+
+Here's a complete example from `main.py` showing how to process a surgery:
+
+```python main.py lines
+import time
+from client import JustinaAIClient
+from analysis_pipeline import run_pipeline
+from typing import List
+
+def procesar_cirugia(client: JustinaAIClient, surgery_id: str) -> bool:
+    print(f"\n{'-'*50}")
+    print(f"🏥 PROCESANDO CIRUGÍA: {surgery_id}")
+    print(f"{'-'*50}")
+    
+    # 1. Obtener trayectoria
+    data = client.get_trajectory(surgery_id)
+    if not data:
+        return False
+
+    # 2. Analizar
+    print("🧠 Analizando trayectoria con pipeline completo...")
+    score, feedback = run_pipeline(data)
+
+    # 3. Enviar
+    return client.send_analysis(surgery_id, score, feedback)
+
+def procesar_batch(client: JustinaAIClient, surgery_ids: List[str]):
+    print(f"\n🚀 Procesando {len(surgery_ids)} cirugías en lote...")
+    exitosas = 0
+    
+    for i, sid in enumerate(surgery_ids, 1):
+        print(f"\n[{i}/{len(surgery_ids)}]")
+        if procesar_cirugia(client, sid):
+            exitosas += 1
+        time.sleep(1)
+        
+    print(f"\n{'='*50}")
+    print(f"📊 RESUMEN: {exitosas}/{len(surgery_ids)} cirugías procesadas correctamente.")
+    print(f"{'='*50}")
+
+def main():
+    print("""
+╔════════════════════════════════════════╗
+║   JUSTINA - SISTEMA DE IA AVANZADO    ║
+╚════════════════════════════════════════╝
+""")
+    client = JustinaAIClient()
+    
+    while True:
+        print("\nOpciones:")
+        print("1. Procesar una cirugía (ID)")
+        print("2. Procesar lote de ejemplo")
+        print("3. Salir")
+        
+        opcion = input("\nSeleccione una opción: ")
+        
+        if opcion == "1":
+            if client.ensure_authenticated():
+                sid = input("Ingrese el UUID de la cirugía: ")
+                if sid:
+                    procesar_cirugia(client, sid)
+                else:
+                    print("⚠️ ID vacío")
+        elif opcion == "2":
+            if client.ensure_authenticated():
+                batch_ids = [
+                    "123e4567-e89b-12d3-a456-426614174000",
+                    "223e4567-e89b-12d3-a456-426614174001"
+                ]
+                procesar_batch(client, batch_ids)
+        elif opcion == "3":
+            print("👋 Saliendo...")
+            break
+        else:
+            print("❌ Opción inválida")
+
+if __name__ == "__main__":
+    main()
+```
+
+## Error Handling
+
+The client includes comprehensive error handling:
+
+<AccordionGroup>
+  <Accordion title="Network Errors">
+    Requests use a configurable timeout (default: 10s). Network failures are caught and logged:
+    
+    ```python
+    try:
+        response = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
+    except Exception as e:
+        print(f"❌ Error de red: {e}")
+        return None
+    ```
+  </Accordion>
+  
+  <Accordion title="Authentication Failures">
+    Invalid credentials return `False` from `login()`. The client automatically retries if the token expires:
+    
+    ```python
+    if not self.token or time.time() > self.token_expiration:
+        return self.login()
+    ```
+  </Accordion>
+  
+  <Accordion title="404 Surgery Not Found">
+    If the surgery ID doesn't exist, `get_trajectory()` returns `None`:
+    
+    ```python
+    if response.status_code == 404:
+        print(f"❌ Cirugía {surgery_id} no encontrada")
+        return None
+    ```
+  </Accordion>
+  
+  <Accordion title="Analysis Submission Errors">
+    `send_analysis()` returns `False` if the backend rejects the submission. Check response text for details:
+    
+    ```python
+    if response.status_code != 204:
+        print(f"❌ Error: {response.status_code} - {response.text}")
+        return False
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Advanced Usage
+
+### Custom Backend URL
+
+```python
+import os
+os.environ["BASE_URL"] = "https://api.justina.com"
+
+client = JustinaAIClient()
+```
+
+### Batch Processing with Retry Logic
+
+```python
+def process_with_retry(client, surgery_id, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            trajectory = client.get_trajectory(surgery_id)
+            if trajectory:
+                score, feedback = run_pipeline(trajectory)
+                if client.send_analysis(surgery_id, score, feedback):
+                    return True
+        except Exception as e:
+            print(f"Attempt {attempt + 1} failed: {e}")
+            time.sleep(2 ** attempt)  # Exponential backoff
+    return False
+```
+
+### Logging Integration
+
+```python
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+client = JustinaAIClient()
+if client.login():
+    logger.info("AI client authenticated successfully")
+else:
+    logger.error("AI client authentication failed")
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="WebSocket Integration" icon="satellite-dish" href="/api/ai-channel">
+    Learn about real-time surgery notifications
+  </Card>
+  <Card title="Analysis Pipeline" icon="diagram-project" href="/ai/analysis-pipeline">
+    Understand how the 5-step analysis works
+  </Card>
+</CardGroup>

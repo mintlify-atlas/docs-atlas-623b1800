@@ -1,0 +1,392 @@
+---
+title: 'Authentication Endpoints'
+description: 'Login, register, and user profile endpoints for the Justina API'
+---
+
+## POST /api/v1/auth/login
+
+Authenticate a user and receive a JWT token for accessing protected endpoints.
+
+### Request
+
+<ParamField body="username" type="string" required>
+  Registered username
+  - Min length: 4 characters
+  - Max length: 50 characters
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  User password
+  - Min length: 6 characters
+  - Max length: 100 characters
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Success message
+</ResponseField>
+
+<ResponseField name="userId" type="UUID">
+  Unique identifier for the authenticated user
+</ResponseField>
+
+<ResponseField name="username" type="string">
+  Authenticated username
+</ResponseField>
+
+<ResponseField name="token" type="string">
+  JWT token valid for 24 hours
+</ResponseField>
+
+### Code Examples
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "surgeon_master",
+    "password": "justina2024"
+  }'
+```
+
+```javascript JavaScript/TypeScript
+const response = await fetch('http://localhost:8080/api/v1/auth/login', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    username: 'surgeon_master',
+    password: 'justina2024'
+  })
+});
+
+const data = await response.json();
+console.log('Token:', data.token);
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'http://localhost:8080/api/v1/auth/login',
+    json={
+        'username': 'surgeon_master',
+        'password': 'justina2024'
+    }
+)
+
+data = response.json()
+print(f"Token: {data['token']}")
+```
+
+```java Java
+import java.net.http.*;
+import java.net.URI;
+
+HttpClient client = HttpClient.newHttpClient();
+String requestBody = """{
+  "username": "surgeon_master",
+  "password": "justina2024"
+}""";
+
+HttpRequest request = HttpRequest.newBuilder()
+    .uri(URI.create("http://localhost:8080/api/v1/auth/login"))
+    .header("Content-Type", "application/json")
+    .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+    .build();
+
+HttpResponse<String> response = client.send(request, 
+    HttpResponse.BodyHandlers.ofString());
+```
+
+</CodeGroup>
+
+### Response Example
+
+```json 200 OK
+{
+  "message": "Login exitoso",
+  "userId": "550e8400-e29b-41d4-a716-446655440000",
+  "username": "surgeon_master",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJKdXN0aW5hX0JhY2tlbmQiLCJzdWIiOiJzdXJnZW9uX21hc3RlciIsInVzZXJJZCI6IjU1MGU4NDAwLWUyOWItNDFkNC1hNzE2LTQ0NjY1NTQ0MDAwMCIsInJvbGUiOiJST0xFX1NVUkdFT04iLCJpYXQiOjE3MDk2Njc2MDAsImV4cCI6MTcwOTc1Mzk5OX0.signature"
+}
+```
+
+```json 400 Bad Request
+{
+  "timestamp": "2024-03-05T10:30:00",
+  "status": 400,
+  "error": "Bad Request",
+  "message": "El username debe tener entre 4 y 50 caracteres",
+  "path": "/api/v1/auth/login"
+}
+```
+
+```json 401 Unauthorized
+{
+  "timestamp": "2024-03-05T10:30:00",
+  "status": 401,
+  "error": "Unauthorized",
+  "message": "Credenciales incorrectas",
+  "path": "/api/v1/auth/login"
+}
+```
+
+<Note>
+The login endpoint also sets an HttpOnly cookie named `jwt-token` with the JWT value. Web browsers will automatically include this cookie in subsequent requests.
+</Note>
+
+---
+
+## POST /api/v1/auth/register
+
+Register a new surgeon account in the system.
+
+### Request
+
+<ParamField body="username" type="string" required>
+  Desired username
+  - Min length: 4 characters
+  - Max length: 50 characters
+  - Must be unique
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  User password
+  - Min length: 6 characters
+  - Max length: 100 characters
+  - Will be hashed with BCrypt
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="string">
+  Success or error message
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error description (only present on failure)
+</ResponseField>
+
+### Code Examples
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST http://localhost:8080/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "new_surgeon",
+    "password": "secure_password123"
+  }'
+```
+
+```javascript JavaScript/TypeScript
+const response = await fetch('http://localhost:8080/api/v1/auth/register', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    username: 'new_surgeon',
+    password: 'secure_password123'
+  })
+});
+
+const data = await response.json();
+if (response.ok) {
+  console.log('Registration successful:', data.message);
+} else {
+  console.error('Registration failed:', data.error);
+}
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'http://localhost:8080/api/v1/auth/register',
+    json={
+        'username': 'new_surgeon',
+        'password': 'secure_password123'
+    }
+)
+
+data = response.json()
+if response.status_code == 200:
+    print(f"Success: {data['message']}")
+else:
+    print(f"Error: {data['error']}")
+```
+
+</CodeGroup>
+
+### Response Examples
+
+```json 200 OK
+{
+  "message": "Usuario registrado con éxito"
+}
+```
+
+```json 400 Bad Request - Existing User
+{
+  "error": "El usuario ya existe"
+}
+```
+
+```json 400 Bad Request - Validation Error
+{
+  "timestamp": "2024-03-05T10:30:00",
+  "status": 400,
+  "error": "Bad Request",
+  "message": "La contraseña debe tener entre 6 y 100 caracteres",
+  "path": "/api/v1/auth/register"
+}
+```
+
+<Warning>
+New users are automatically assigned the `ROLE_SURGEON` role. AI system accounts must be created manually with `ROLE_AI`.
+</Warning>
+
+---
+
+## GET /api/v1/auth/me
+
+Retrieve information about the currently authenticated user.
+
+### Authentication
+
+<Note>
+This endpoint requires a valid JWT token in the Authorization header or jwt-token cookie.
+</Note>
+
+### Request
+
+No request body required. Include JWT token:
+
+```
+Authorization: Bearer <your-jwt-token>
+```
+
+### Response
+
+<ResponseField name="id" type="UUID">
+  User's unique identifier
+</ResponseField>
+
+<ResponseField name="username" type="string">
+  User's username
+</ResponseField>
+
+<ResponseField name="role" type="string">
+  User's role (`ROLE_SURGEON` or `ROLE_AI`)
+</ResponseField>
+
+### Code Examples
+
+<CodeGroup>
+
+```bash cURL
+curl -X GET http://localhost:8080/api/v1/auth/me \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+```
+
+```javascript JavaScript/TypeScript
+const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...';
+
+const response = await fetch('http://localhost:8080/api/v1/auth/me', {
+  headers: {
+    'Authorization': `Bearer ${token}`
+  }
+});
+
+const user = await response.json();
+console.log('Current user:', user);
+```
+
+```python Python
+import requests
+
+token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+
+headers = {
+    'Authorization': f'Bearer {token}'
+}
+
+response = requests.get(
+    'http://localhost:8080/api/v1/auth/me',
+    headers=headers
+)
+
+user = response.json()
+print(f"User: {user['username']} (Role: {user['role']})")
+```
+
+</CodeGroup>
+
+### Response Examples
+
+```json 200 OK
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "username": "surgeon_master",
+  "role": "ROLE_SURGEON"
+}
+```
+
+```json 401 Unauthorized
+{
+  "timestamp": "2024-03-05T10:30:00",
+  "status": 401,
+  "error": "Unauthorized",
+  "message": "Full authentication is required to access this resource",
+  "path": "/api/v1/auth/me"
+}
+```
+
+## Default Credentials
+
+The application initializes with default accounts for testing:
+
+| Username | Password | Role |
+|----------|----------|------|
+| `surgeon_master` | `justina2024` | ROLE_SURGEON |
+| `ia_justina` | `ia_secret_2024` | ROLE_AI |
+
+<Warning>
+**Security Notice:** Change these default passwords immediately in production environments. Never use default credentials in deployed systems.
+</Warning>
+
+## Error Handling
+
+All authentication endpoints return consistent error responses with:
+
+- `timestamp` - ISO 8601 formatted error time
+- `status` - HTTP status code
+- `error` - HTTP status reason phrase
+- `message` - Human-readable error description
+- `path` - Request path that caused the error
+
+### Common Validation Errors
+
+- Username too short/long
+- Password too short/long
+- Missing required fields
+- Username already exists (registration)
+- Invalid credentials (login)
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="JWT Authentication" icon="shield" href="/api/authentication">
+    Learn about JWT token structure and security
+  </Card>
+  <Card title="Surgery Endpoints" icon="scalpel" href="/api/surgery-endpoints">
+    Access surgical trajectory and analysis data
+  </Card>
+</CardGroup>

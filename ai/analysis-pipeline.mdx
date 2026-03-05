@@ -1,0 +1,215 @@
+---
+title: "Analysis Pipeline"
+description: "Detailed breakdown of the 5-step surgical performance analysis algorithm"
+---
+
+The analysis pipeline is the core of the Justina AI system. It processes raw surgical trajectory data through five sequential steps to produce a comprehensive performance evaluation.
+
+## Pipeline Entry Point
+
+The main entry point is the `run_pipeline()` function, which orchestrates all five analysis steps:
+
+```python analysis_pipeline.py
+def run_pipeline(trajectory_data: Dict) -> Tuple[float, str]:
+    """
+    PIPELINE COMPLETO DE ANÁLISIS DE 5 PASOS
+    """
+    # PASO 1: Ingesta y Limpieza
+    df = _paso1_ingestar_y_limpiar(trajectory_data)
+    
+    # PASO 2: Métricas de Destreza (Física)
+    metricas = _paso2_calcular_destreza(df)
+    
+    # PASO 3: Comparación con Patrón Oro
+    benchmarking = _paso3_benchmarking(df)
+    
+    # PASO 4: Análisis de Riesgo
+    riesgo = _paso4_analizar_riesgo(df)
+    
+    # PASO 5: Feedback Inteligente
+    score, feedback = _paso5_generar_feedback(metricas, benchmarking, riesgo)
+    
+    return score, feedback
+```
+
+## Input Data Structure
+
+The pipeline expects trajectory data in this format:
+
+```json
+{
+  "surgeryId": "uuid-string",
+  "surgeonUsername": "surgeon_master",
+  "startTime": 1710523456789,
+  "endTime": 1710523756789,
+  "movements": [
+    {
+      "coordinates": [10.5, 20.3, 15.7],
+      "event": "START",
+      "timestamp": 1710523456789
+    },
+    {
+      "coordinates": [10.6, 20.4, 15.8],
+      "event": "NONE",
+      "timestamp": 1710523456889
+    }
+  ]
+}
+```
+
+## Pipeline Steps
+
+<Steps>
+  <Step title="Step 1: Data Ingestion & Cleaning">
+    Converts the JSON trajectory data into a pandas DataFrame optimized for numerical analysis.
+    
+    <Card title="Learn More" icon="book" href="/ai/data-ingestion">
+      Detailed documentation on data preparation
+    </Card>
+  </Step>
+  
+  <Step title="Step 2: Dexterity Metrics">
+    Calculates physics-based metrics including velocity, acceleration, jerk, and economy of movement.
+    
+    <Card title="Learn More" icon="book" href="/ai/dexterity-metrics">
+      Complete guide to dexterity calculations
+    </Card>
+  </Step>
+  
+  <Step title="Step 3: Benchmarking">
+    Compares actual trajectory to an ideal straight-line path.
+    
+    <Card title="Learn More" icon="book" href="/ai/benchmarking">
+      How performance is compared to ideal patterns
+    </Card>
+  </Step>
+  
+  <Step title="Step 4: Risk Analysis">
+    Identifies critical events and spatial patterns indicating surgical risks.
+    
+    <Card title="Learn More" icon="book" href="/ai/risk-analysis">
+      Risk detection and quadrant analysis
+    </Card>
+  </Step>
+  
+  <Step title="Step 5: Scoring & Feedback">
+    Generates final score and personalized recommendations.
+    
+    <Card title="Learn More" icon="book" href="/ai/scoring">
+      Scoring algorithm and feedback generation
+    </Card>
+  </Step>
+</Steps>
+
+## Output Structure
+
+The pipeline returns a tuple containing:
+
+1. **Score** (float): Numerical score from 0 to 100
+2. **Feedback** (string): Markdown-formatted report
+
+### Example Output
+
+```python
+score = 82.5
+feedback = """### ✅ BUENO - Score: 82.5/100
+
+#### 🚨 ALERTAS CRÍTICAS
+- Hemorragias: 1 (REVISAR TÉCNICA)
+- Contactos Tumor: 2
+- Cuadrantes de Riesgo: Sup-Der
+
+#### 📊 MÉTRICAS DE DESTREZA
+- **Economía de Movimiento:** 1.35x (Ideal < 1.2x)
+- **Fluidez (Jerk Promedio):** 0.42
+- **Precisión vs Patrón Oro:** 87.3%
+
+#### 📈 ESTADÍSTICAS
+- **Duración Total:** 45.3s
+- **Distancia Recorrida:** 123.45 unidades
+- **Velocidad Promedio:** 2.73 u/s
+
+#### 💡 RECOMENDACIONES
+- Priorizar control vascular en cuadrantes críticos.
+- Incrementar práctica en simulador para mejorar coordinación motora.
+"""
+```
+
+## Performance Considerations
+
+<Note>
+The entire pipeline typically completes in under 1 second for surgeries with 1000-5000 movements.
+</Note>
+
+### Optimization Techniques
+
+- **Vectorized operations**: All calculations use NumPy for C-level performance
+- **Single-pass processing**: Each step processes data only once
+- **Efficient data structures**: pandas DataFrames for optimized numerical operations
+- **Minimal memory footprint**: In-place operations where possible
+
+## Error Handling
+
+The pipeline handles various edge cases:
+
+<AccordionGroup>
+  <Accordion title="Empty or Invalid Data">
+    If `movements` array is empty or malformed, the pipeline returns a default score of 0 with an error message.
+  </Accordion>
+  
+  <Accordion title="Missing Coordinates">
+    Missing z-coordinates default to 0. Missing x or y coordinates will raise a ValueError.
+  </Accordion>
+  
+  <Accordion title="Division by Zero">
+    All division operations use `.replace(0, np.inf)` followed by `.replace(np.inf, 0)` to handle zero time deltas.
+  </Accordion>
+  
+  <Accordion title="Identical Start/End Points">
+    When start and end positions are identical, economy defaults to 1.0 to avoid division by zero.
+  </Accordion>
+</AccordionGroup>
+
+## Integration Example
+
+Here's a complete example showing how the pipeline integrates with the Justina backend:
+
+```python
+import requests
+from analysis_pipeline import run_pipeline
+
+# 1. Authenticate with backend
+response = requests.post("http://localhost:8080/api/v1/auth/login", json={
+    "username": "ia_justina",
+    "password": "ia_secret_2024"
+})
+token = response.json()["token"]
+
+# 2. Fetch trajectory for completed surgery
+headers = {"Authorization": f"Bearer {token}"}
+trajectory = requests.get(
+    f"http://localhost:8080/api/v1/surgeries/{surgery_id}/trajectory",
+    headers=headers
+).json()
+
+# 3. Run analysis pipeline
+score, feedback = run_pipeline(trajectory)
+
+# 4. Submit results back to backend
+requests.post(
+    f"http://localhost:8080/api/v1/surgeries/{surgery_id}/analysis",
+    json={"score": score, "feedback": feedback},
+    headers=headers
+)
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Data Ingestion" icon="database" href="/ai/data-ingestion">
+    Learn how trajectory data is cleaned and prepared
+  </Card>
+  <Card title="Dexterity Metrics" icon="gauge" href="/ai/dexterity-metrics">
+    Explore the physics calculations behind skill assessment
+  </Card>
+</CardGroup>

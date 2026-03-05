@@ -1,0 +1,355 @@
+---
+title: Running Simulations
+description: Step-by-step guide to run surgical simulations in the Justina platform
+---
+
+## Overview
+
+Justina's surgical simulation module provides a 3D interactive environment where surgeons can practice robotic surgical procedures. The platform uses **Babylon.js** for real-time 3D rendering and **WebSocket** for live telemetry streaming.
+
+## Prerequisites
+
+Before starting a simulation:
+
+<Steps>
+  <Step title="Authentication">
+    You must be logged in with a **ROLE_SURGEON** account. See the [Authentication Guide](/guide/authentication) for details.
+  </Step>
+
+  <Step title="Browser Requirements">
+    Use a modern browser with WebGL support (Chrome, Firefox, Edge, or Safari).
+  </Step>
+
+  <Step title="Network Connection">
+    Ensure stable internet connectivity for real-time WebSocket communication.
+  </Step>
+</Steps>
+
+## Starting a Simulation
+
+### From the Dashboard
+
+<Steps>
+  <Step title="Navigate to Dashboard">
+    After logging in, you'll land on the main dashboard at `/dashboard`.
+  </Step>
+
+  <Step title="Select New Simulation Module">
+    Click on the **"Nueva Simulación"** (New Simulation) card. This module features a Play icon and is colored blue.
+
+    ```typescript
+    {
+      id: "simulator",
+      title: "Nueva Simulación",
+      description: "Inicia una nueva simulación de procedimiento quirúrgico robótico",
+      icon: Play,
+      color: "blue",
+      available: true
+    }
+    ```
+  </Step>
+
+  <Step title="Simulator Loads">
+    You'll be redirected to `/simulator` where the 3D scene initializes with Babylon.js.
+  </Step>
+</Steps>
+
+## Understanding the 3D Interface
+
+### Scene Components
+
+The simulation environment includes:
+
+<CardGroup cols={2}>
+  <Card title="Surgical Instrument" icon="scalpel">
+    A 3D scalpel model that follows your mouse cursor. Positioned in 3D space with real-time coordinate tracking.
+  </Card>
+
+  <Card title="Kidney Model" icon="heart-pulse">
+    A 3D kidney with anatomical structures including arteries (highlighted in red) that must be avoided.
+  </Card>
+
+  <Card title="Tumor Fragments" icon="bacteria">
+    25 distributed tumor fragments (pink spheres) that need to be removed during the procedure.
+  </Card>
+
+  <Card title="Camera Controls" icon="video">
+    An arc-rotate camera simulating a laparoscopic view. Use mouse to pan, rotate, and zoom.
+  </Card>
+</CardGroup>
+
+### Coordinate Display Panel
+
+In the top-right corner, you'll see a panel displaying:
+
+```
+Coordenadas del Instrumento
+Coordenada X: 2.34
+Coordenada Y: 1.56
+Coordenada Z: 0.89
+```
+
+These coordinates are streamed to the backend in real-time during active simulation.
+
+## Performing a Simulation
+
+### Step-by-Step Procedure
+
+<Steps>
+  <Step title="Click 'INICIAR CIRUGÍA'">
+    Click the green **"INICIAR CIRUGÍA"** button at the bottom center of the screen.
+
+    This triggers:
+    - WebSocket connection establishment
+    - START event sent to backend
+    - Creation of new `SurgerySession` with unique ID
+
+    ```typescript
+    startButton.onPointerUpObservable.add(() => {
+      if (simulationStarted) return;
+
+      simulationStarted = true;
+      setEvent("START");
+
+      // Establish WebSocket connection
+      conectarWebSocket();
+
+      startButton.isVisible = false;
+      endButton.isVisible = true;
+    });
+    ```
+  </Step>
+
+  <Step title="Position the Instrument">
+    Move your mouse to control the scalpel position. Use scroll wheel to adjust depth (Z-axis distance).
+
+    ```typescript
+    scene.onPointerMove = () => {
+      const ray = scene.createPickingRay(
+        scene.pointerX,
+        scene.pointerY,
+        BABYLON.Matrix.Identity(),
+        camera
+      );
+
+      const newPosition = ray.origin.add(ray.direction.scale(depth));
+      scalpelMesh.position = newPosition.add(offset);
+    };
+    ```
+  </Step>
+
+  <Step title="Activate the Instrument">
+    **Click and hold** the left mouse button to activate the surgical instrument. While active, collision detection is enabled.
+  </Step>
+
+  <Step title="Remove Tumor Fragments">
+    Touch the pink tumor spheres with the activated scalpel to remove them. Each removal triggers a `TUMOR_TOUCH` event.
+
+    ```typescript
+    if (cutter.intersectsMesh(fragment, true)) {
+      fragment.dispose();
+      tumorFragments.splice(index, 1);
+
+      enviarEvento(
+        scalpelMesh?.position.x,
+        scalpelMesh?.position.y,
+        scalpelMesh?.position.z,
+        "TUMOR_TOUCH"
+      );
+    }
+    ```
+  </Step>
+
+  <Step title="Avoid the Artery">
+    <Warning>
+      **Do not cut the red artery!** Cutting the artery triggers a `HEMORRHAGE` event and negatively impacts your AI score.
+    </Warning>
+
+    ```typescript
+    if (!arteryCut && cutter.intersectsMesh(arteryMesh, true)) {
+      arteryCut = true;
+      arteryMesh.material = redMaterial;
+
+      enviarEvento(
+        scalpelMesh?.position.x,
+        scalpelMesh?.position.y,
+        scalpelMesh?.position.z,
+        "HEMORRHAGE"
+      );
+    }
+    ```
+  </Step>
+
+  <Step title="Complete the Procedure">
+    Once all tumor fragments are removed (or when you're ready to finish), click the red **"TERMINAR CIRUGÍA"** button.
+
+    This sends a `FINISH` event and closes the WebSocket connection.
+  </Step>
+</Steps>
+
+## Real-Time Telemetry Streaming
+
+### WebSocket Connection
+
+When you start a simulation, the frontend establishes a WebSocket connection:
+
+```typescript
+function conectarWebSocket() {
+  const token = getTokenFromCookies();
+
+  if (!token) {
+    console.error("No token available - Cannot connect to WebSocket");
+    return;
+  }
+
+  websocketRef.current = new WebSocket(
+    `${WS_URL}/ws/simulation?token=${token}`
+  );
+
+  websocketRef.current.onopen = () => {
+    console.log("WebSocket connected successfully");
+    enviarEvento(0, 0, 0, "START");
+  };
+
+  websocketRef.current.onmessage = (event) => {
+    const message = JSON.parse(event.data);
+
+    if (message.status === "SAVED") {
+      currentSurgeryId = message.surgeryId;
+      // Store surgery ID for results retrieval
+      document.cookie = `lastSurgeryId=${surgeryId}; path=/; max-age=86400`;
+    }
+  };
+}
+```
+
+### Telemetry Data Format
+
+Each movement and event is sent as JSON:
+
+```json
+{
+  "coordinates": [2.34, 1.56, 0.89],
+  "event": "TUMOR_TOUCH",
+  "timestamp": 1737849600000
+}
+```
+
+### Surgery Events
+
+The platform tracks these surgical events:
+
+| Event | Description | Impact |
+|-------|-------------|--------|
+| `START` | Surgery session begins | Initializes tracking |
+| `MOVE` | Instrument movement (implicit) | Recorded in trajectory |
+| `TUMOR_TOUCH` | Tumor fragment removed | Positive score |
+| `HEMORRHAGE` | Artery accidentally cut | Negative score |
+| `FINISH` | Surgery session ends | Triggers AI analysis |
+
+### Backend Processing
+
+The backend receives telemetry via WebSocket handler:
+
+```java
+public void handleTextMessage(WebSocketSession session, TextMessage message) {
+    TelemetryDTO telemetry = objectMapper.readValue(
+        message.getPayload(), 
+        TelemetryDTO.class
+    );
+
+    // Convert DTO to domain object
+    Movement movement = new Movement(
+        telemetry.coordinates(),
+        telemetry.event(),
+        telemetry.timestamp()
+    );
+
+    // Get or create surgery session
+    SurgerySession surgery = activeSessions.computeIfAbsent(
+        session.getId(), 
+        k -> new SurgerySession(surgeonId)
+    );
+
+    // Add movement to trajectory
+    surgery.addMovement(movement);
+
+    // On FINISH event, save to database
+    if (telemetry.event() == SurgeryEvent.FINISH) {
+        surgery.endSurgery();
+        surgeryRepository.save(surgery);
+        
+        // Send completion message
+        session.sendMessage(new TextMessage(String.format(
+            "{\"status\":\"SAVED\",\"surgeryId\":\"%s\"}",
+            surgery.getId()
+        )));
+    }
+}
+```
+
+## Camera Controls
+
+The simulation uses an **Arc Rotate Camera** for intuitive 3D navigation:
+
+<CardGroup cols={2}>
+  <Card title="Rotate View" icon="rotate">
+    **Left-click and drag** to rotate around the surgical site
+  </Card>
+
+  <Card title="Pan View" icon="arrows-up-down-left-right">
+    **Right-click and drag** (or Ctrl+Left-click) to pan the camera
+  </Card>
+
+  <Card title="Zoom In/Out" icon="magnifying-glass">
+    **Mouse wheel** to zoom in and out (limited between 6 and 20 units)
+  </Card>
+
+  <Card title="Depth Control" icon="layer-group">
+    **Scroll while moving** to adjust instrument depth along viewing axis
+  </Card>
+</CardGroup>
+
+## Simulation Performance Tips
+
+<Note>
+  For optimal performance:
+  - Close unnecessary browser tabs
+  - Use hardware acceleration in browser settings
+  - Ensure your GPU drivers are up to date
+  - Disable browser extensions that may interfere with WebGL
+</Note>
+
+## Troubleshooting
+
+### Scalpel Not Moving
+
+- Verify the simulation has started (green button clicked)
+- Check that your mouse is over the canvas
+- Refresh the page and restart
+
+### WebSocket Connection Failed
+
+- Confirm you're logged in with valid credentials
+- Check the browser console for token errors
+- Verify backend WebSocket endpoint is accessible
+- Ensure firewall allows WebSocket connections
+
+### Frame Rate Drops
+
+- Reduce browser window size
+- Close other applications using GPU
+- Lower graphics quality (if available)
+- Try a different browser
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="View Results" icon="chart-line" href="/guide/viewing-results">
+    Learn how to view your simulation results and AI feedback
+  </Card>
+
+  <Card title="Dashboard" icon="grid" href="/guide/dashboard">
+    Return to dashboard to access other modules
+  </Card>
+</CardGroup>

@@ -1,122 +1,138 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "Justina",
+  "theme": "palm",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#040404",
+    "light": "#2563EB",
+    "dark": "#040404"
   },
-  "favicon": "/favicon.svg",
+  "favicon": "/logo.svg",
+  "logo": {
+    "light": "/logo.svg",
+    "dark": "/logo.svg"
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/No-Country-simulation/S02-26-Equipo-24-Web-App-Development"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/No-Country-simulation/S02-26-Equipo-24-Web-App-Development"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Platform",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Getting Started",
             "pages": [
-              "index",
+              "introduction",
               "quickstart",
-              "development"
+              "architecture"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Features",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "features/simulation",
+              "features/real-time-telemetry",
+              "features/ai-analysis",
+              "features/performance-scoring"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "User Guide",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
-            ]
-          },
-          {
-            "group": "AI tools",
-            "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "guide/authentication",
+              "guide/running-simulations",
+              "guide/viewing-results",
+              "guide/dashboard"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "Backend API",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Overview",
             "pages": [
-              "api-reference/introduction"
+              "api/overview",
+              "api/authentication"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "REST Endpoints",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api/auth-endpoints",
+              "api/surgery-endpoints"
+            ]
+          },
+          {
+            "group": "WebSocket",
+            "pages": [
+              "api/websocket-overview",
+              "api/simulation-channel",
+              "api/ai-channel"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "AI System",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "ai/overview",
+              "ai/analysis-pipeline"
+            ]
+          },
+          {
+            "group": "Components",
+            "pages": [
+              "ai/data-ingestion",
+              "ai/dexterity-metrics",
+              "ai/benchmarking",
+              "ai/risk-analysis",
+              "ai/scoring"
+            ]
+          },
+          {
+            "group": "Integration",
+            "pages": [
+              "ai/setup",
+              "ai/client-usage"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Deployment",
+        "groups": [
+          {
+            "group": "Setup",
+            "pages": [
+              "deployment/prerequisites",
+              "deployment/environment-variables",
+              "deployment/docker"
+            ]
+          },
+          {
+            "group": "Components",
+            "pages": [
+              "deployment/backend",
+              "deployment/frontend",
+              "deployment/ai-service"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

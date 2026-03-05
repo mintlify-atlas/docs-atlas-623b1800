@@ -1,0 +1,542 @@
+---
+title: Frontend Deployment
+description: Deploy the Justina Next.js frontend application
+---
+
+This guide covers deploying the Justina frontend, a Next.js 16 application built with React 19 and TypeScript.
+
+## Prerequisites
+
+Ensure you have:
+
+- Node.js 20+ installed
+- npm, yarn, pnpm, or bun package manager
+- Backend API running and accessible
+
+<Note>
+  See the [Prerequisites](/deployment/prerequisites) page for installation instructions.
+</Note>
+
+## Clone Repository
+
+```bash
+git clone <repository-url>
+cd S02-26-Equipo-24-Web-App-Development/frontend
+```
+
+## Install Dependencies
+
+The frontend uses several key dependencies:
+
+- **Next.js 16.1.6** - React framework
+- **React 19.2.3** - UI library
+- **Babylon.js 8.51.2** - 3D surgical simulation
+- **STOMP/WebSocket** - Real-time telemetry
+- **Tailwind CSS** - Styling
+- **TypeScript 5** - Type safety
+
+<CodeGroup>
+```bash npm
+npm install
+```
+
+```bash yarn
+yarn install
+```
+
+```bash pnpm
+pnpm install
+```
+
+```bash bun
+bun install
+```
+</CodeGroup>
+
+## Configure Environment
+
+### Create Environment File
+
+Create `.env.local` in the frontend directory:
+
+```bash .env.local
+NEXT_PUBLIC_API_URL=http://localhost:8080
+```
+
+<Note>
+  Variables prefixed with `NEXT_PUBLIC_` are exposed to the browser.
+</Note>
+
+### Environment Variables
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `NEXT_PUBLIC_API_URL` | Backend API URL | `http://localhost:8080` | Yes |
+
+<Warning>
+  Update `NEXT_PUBLIC_API_URL` to point to your production backend URL.
+</Warning>
+
+### Production Configuration
+
+For production deployment:
+
+```bash .env.production
+NEXT_PUBLIC_API_URL=https://api.yourdomain.com
+```
+
+## Development Server
+
+Run the development server with hot reload:
+
+<CodeGroup>
+```bash npm
+npm run dev
+```
+
+```bash yarn
+yarn dev
+```
+
+```bash pnpm
+pnpm dev
+```
+
+```bash bun
+bun dev
+```
+</CodeGroup>
+
+The application will be available at:
+```
+http://localhost:3000
+```
+
+<Note>
+  The page auto-updates as you edit files. The development server uses React Fast Refresh.
+</Note>
+
+## Production Build
+
+### Build Application
+
+Create an optimized production build:
+
+<CodeGroup>
+```bash npm
+npm run build
+```
+
+```bash yarn
+yarn build
+```
+
+```bash pnpm
+pnpm build
+```
+
+```bash bun
+bun run build
+```
+</CodeGroup>
+
+This command:
+- Compiles TypeScript
+- Bundles and minifies JavaScript
+- Optimizes images and assets
+- Generates static pages where possible
+- Creates `.next/` build directory
+
+Expected output:
+```
+✓ Compiled successfully
+✓ Linting and checking validity of types
+✓ Collecting page data
+✓ Generating static pages (5/5)
+✓ Finalizing page optimization
+```
+
+### Start Production Server
+
+After building, start the production server:
+
+<CodeGroup>
+```bash npm
+npm run start
+```
+
+```bash yarn
+yarn start
+```
+
+```bash pnpm
+pnpm start
+```
+
+```bash bun
+bun start
+```
+</CodeGroup>
+
+The application serves on port 3000 by default.
+
+### Custom Port
+
+```bash
+PORT=8080 npm run start
+```
+
+## Deployment Options
+
+### Vercel (Recommended)
+
+Vercel is the easiest deployment option for Next.js applications:
+
+<Steps>
+  <Step title="Install Vercel CLI">
+    ```bash
+    npm install -g vercel
+    ```
+  </Step>
+
+  <Step title="Deploy">
+    ```bash
+    vercel
+    ```
+    
+    Follow the prompts to:
+    - Link to your Vercel account
+    - Configure project settings
+    - Set environment variables
+  </Step>
+
+  <Step title="Configure Environment Variables">
+    In Vercel dashboard, add:
+    - `NEXT_PUBLIC_API_URL` = Your backend URL
+  </Step>
+</Steps>
+
+<Note>
+  Vercel automatically detects Next.js and configures optimal settings.
+</Note>
+
+### Node.js Server
+
+Deploy on any Node.js hosting:
+
+<Steps>
+  <Step title="Build Application">
+    ```bash
+    npm run build
+    ```
+  </Step>
+
+  <Step title="Upload Files">
+    Transfer these directories to your server:
+    - `.next/`
+    - `public/`
+    - `package.json`
+    - `next.config.ts`
+    - `.env.production`
+  </Step>
+
+  <Step title="Install Dependencies">
+    ```bash
+    npm install --production
+    ```
+  </Step>
+
+  <Step title="Start Server">
+    ```bash
+    npm run start
+    ```
+  </Step>
+</Steps>
+
+### PM2 Process Manager
+
+Use PM2 for production process management:
+
+<Steps>
+  <Step title="Install PM2">
+    ```bash
+    npm install -g pm2
+    ```
+  </Step>
+
+  <Step title="Start Application">
+    ```bash
+    pm2 start npm --name "justina-frontend" -- start
+    ```
+  </Step>
+
+  <Step title="Configure Auto-Restart">
+    ```bash
+    pm2 startup
+    pm2 save
+    ```
+  </Step>
+
+  <Step title="Monitor Application">
+    ```bash
+    pm2 status
+    pm2 logs justina-frontend
+    pm2 monit
+    ```
+  </Step>
+</Steps>
+
+### Docker Deployment
+
+Create `Dockerfile` in frontend directory:
+
+```dockerfile
+FROM node:20-alpine AS base
+
+# Install dependencies
+FROM base AS deps
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+
+# Build application
+FROM base AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+RUN npm run build
+
+# Production image
+FROM base AS runner
+WORKDIR /app
+
+ENV NODE_ENV production
+
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+USER nextjs
+
+EXPOSE 3000
+
+ENV PORT 3000
+
+CMD ["node", "server.js"]
+```
+
+Build and run:
+
+```bash
+# Build image
+docker build -t justina-frontend .
+
+# Run container
+docker run -p 3000:3000 \
+  -e NEXT_PUBLIC_API_URL=http://backend:8080 \
+  justina-frontend
+```
+
+### Static Export
+
+For static hosting (Nginx, Apache, S3):
+
+<Warning>
+  Static export has limitations with dynamic features like WebSockets and API routes.
+</Warning>
+
+Modify `next.config.ts`:
+
+```typescript next.config.ts
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
+  output: 'export',
+  images: {
+    unoptimized: true,
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "images.unsplash.com",
+      },
+    ],
+  },
+};
+
+export default nextConfig;
+```
+
+Build:
+
+```bash
+npm run build
+```
+
+The `out/` directory contains static files ready for deployment.
+
+## Nginx Configuration
+
+Example Nginx configuration for reverse proxy:
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+## Verify Deployment
+
+<Steps>
+  <Step title="Check Application">
+    Open browser to:
+    ```
+    http://localhost:3000
+    ```
+  </Step>
+
+  <Step title="Test Backend Connection">
+    Verify the frontend can connect to the backend API.
+    
+    Check browser console for errors:
+    ```
+    Press F12 → Console tab
+    ```
+  </Step>
+
+  <Step title="Test WebSocket Connection">
+    Ensure real-time features work:
+    - Start a surgical simulation
+    - Verify telemetry data flows
+    - Check for WebSocket errors in console
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+<Accordion title="API Connection Errors">
+  Check `NEXT_PUBLIC_API_URL` is correct:
+  ```bash
+  echo $NEXT_PUBLIC_API_URL
+  ```
+  
+  Verify backend is accessible:
+  ```bash
+  curl http://your-backend-url/swagger-ui/index.html
+  ```
+  
+  Check CORS configuration on backend.
+</Accordion>
+
+<Accordion title="WebSocket Connection Failed">
+  Ensure backend WebSocket endpoint is accessible:
+  ```
+  ws://your-backend-url/ws/simulation
+  ```
+  
+  Check firewall rules allow WebSocket connections.
+  
+  Verify JWT token is being sent correctly.
+</Accordion>
+
+<Accordion title="3D Scene Not Loading">
+  Babylon.js requires WebGL support. Check browser compatibility:
+  ```javascript
+  console.log(window.WebGLRenderingContext)
+  ```
+  
+  Verify 3D model files are accessible in `public/` directory.
+</Accordion>
+
+<Accordion title="Build Failures">
+  Clear cache and rebuild:
+  ```bash
+  rm -rf .next node_modules
+  npm install
+  npm run build
+  ```
+  
+  Check TypeScript errors:
+  ```bash
+  npm run lint
+  ```
+</Accordion>
+
+## Performance Optimization
+
+### Image Optimization
+
+Next.js automatically optimizes images. Use the `<Image>` component:
+
+```tsx
+import Image from 'next/image'
+
+<Image
+  src="/surgery-image.jpg"
+  alt="Surgery"
+  width={800}
+  height={600}
+  priority
+/>
+```
+
+### Font Optimization
+
+The project uses Next.js font optimization with Geist:
+
+```typescript
+import { GeistSans } from 'next/font/geist'
+```
+
+## Monitoring and Logs
+
+### PM2 Logs
+
+```bash
+pm2 logs justina-frontend
+pm2 logs justina-frontend --lines 100
+```
+
+### Next.js Logs
+
+```bash
+# Development
+npm run dev
+
+# Production
+NODE_OPTIONS='--inspect' npm run start
+```
+
+## Next Steps
+
+After deploying the frontend:
+
+1. [Deploy Backend](/deployment/backend) - Ensure backend is running
+2. [Deploy AI Service](/deployment/ai-service) - Deploy AI analysis service
+3. Configure SSL certificates
+4. Set up CDN for static assets
+5. Configure monitoring and analytics
+6. Set up error tracking (Sentry, LogRocket)
+
+## Additional Resources
+
+- [Environment Variables](/deployment/environment-variables) - Configuration reference
+- [Next.js Documentation](https://nextjs.org/docs) - Official Next.js docs
+- [Vercel Deployment](https://vercel.com/docs) - Vercel deployment guide
+- Frontend dependencies: `package.json`
+- Tech stack: Next.js 16, React 19, TypeScript 5, Babylon.js 8

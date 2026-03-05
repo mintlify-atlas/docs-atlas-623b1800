@@ -1,0 +1,424 @@
+---
+title: "Performance Scoring"
+description: "Comprehensive algorithm for evaluating surgical skill and generating objective performance metrics"
+---
+
+## Overview
+
+Justina's performance scoring system provides objective, quantifiable measurements of surgical skill. The algorithm combines error detection, movement efficiency analysis, and precision metrics to generate scores from 0-100 with actionable feedback.
+
+<Note>
+  The scoring system is penalty-based, starting from a perfect 100 and deducting points for errors and inefficiencies.
+</Note>
+
+## Scoring Algorithm
+
+The core scoring logic balances multiple performance factors:
+
+```python
+def _paso5_generar_feedback(m: Dict, b: Dict, r: Dict) -> Tuple[float, str]:
+    score = 100.0
+    score -= r["touches"] * 8
+    score -= r["hemorrhages"] * 15
+    if m["economia"] > 1.5: score -= 10
+    score = max(0, min(100, score))
+```
+
+<CardGroup cols={3}>
+  <Card title="Base Score" icon="hundred-points">
+    Start: 100 points (perfect performance)
+  </Card>
+  <Card title="Error Penalties" icon="minus">
+    Deductions for surgical mistakes
+  </Card>
+  <Card title="Efficiency Bonus" icon="trophy">
+    Maintain score with optimal movement
+  </Card>
+</CardGroup>
+
+## Penalty Structure
+
+### Critical Error Penalties
+
+<Accordion title="Hemorrhages: -15 points each">
+  **Most severe penalty** - indicates vascular damage
+  
+  ```python
+  score -= r["hemorrhages"] * 15
+  ```
+  
+  - Triggered when scalpel cuts arterial structures
+  - Each hemorrhage represents a life-threatening error
+  - Multiple hemorrhages can drastically reduce score
+  
+  **Example Impact:**
+  - 1 hemorrhage: 100 → 85 points
+  - 2 hemorrhages: 100 → 70 points
+  - 3 hemorrhages: 100 → 55 points (DEFICIENTE tier)
+</Accordion>
+
+<Accordion title="Tumor Touches: -8 points each">
+  **Moderate penalty** - indicates imprecise cutting
+  
+  ```python
+  score -= r["touches"] * 8
+  ```
+  
+  - Counts contacts with tumor tissue during removal
+  - More touches = less efficient tumor extraction
+  - Ideal performance minimizes tissue manipulation
+  
+  **Example Impact:**
+  - 3 touches: 100 → 76 points
+  - 5 touches: 100 → 60 points (MEJORABLE tier)
+  - 10 touches: 100 → 20 points
+</Accordion>
+
+<Accordion title="Poor Economy of Movement: -10 points">
+  **Efficiency penalty** - triggered when path is excessively indirect
+  
+  ```python
+  if m["economia"] > 1.5: score -= 10
+  ```
+  
+  - Economy > 1.5x means 50% more distance traveled than necessary
+  - Indicates poor surgical planning and fatigue risk
+  - Single flat penalty rather than graduated
+  
+  **Threshold Rationale:**
+  - < 1.2x: Excellent efficiency
+  - 1.2x - 1.5x: Acceptable with room for improvement
+  - > 1.5x: Unacceptable inefficiency (-10 penalty)
+</Accordion>
+
+## Performance Tiers
+
+Scores are categorized into four performance levels:
+
+```python
+status = (
+    "🌟 EXCELENTE" if score >= 90 else
+    "✅ BUENO" if score >= 75 else
+    "⚠️ MEJORABLE" if score >= 60 else
+    "❌ DEFICIENTE"
+)
+```
+
+<CardGroup cols={2}>
+  <Card title="🌟 EXCELENTE (90-100)" icon="star">
+    Expert-level performance with minimal errors and optimal efficiency
+  </Card>
+  <Card title="✅ BUENO (75-89)" icon="circle-check">
+    Proficient skill with acceptable precision and few critical errors
+  </Card>
+  <Card title="⚠️ MEJORABLE (60-74)" icon="triangle-exclamation">
+    Needs improvement - multiple errors or poor efficiency
+  </Card>
+  <Card title="❌ DEFICIENTE (0-59)" icon="circle-xmark">
+    Requires significant practice - critical errors or severe inefficiency
+  </Card>
+</CardGroup>
+
+## Factors Affecting Score
+
+### 1. Hemorrhages (Critical)
+
+Detected when the scalpel intersects arterial meshes:
+
+```typescript
+if (!arteryCut && cutter.intersectsMesh(arteryMesh, true)) {
+  arteryCut = true;
+  enviarEvento(
+    scalpelMesh?.position.x,
+    scalpelMesh?.position.y,
+    scalpelMesh?.position.z,
+    "HEMORRHAGE"
+  );
+}
+```
+
+**Risk Analysis:**
+```python
+hemorrhages = (df["event"] == "HEMORRHAGE").sum()
+```
+
+<Tip>
+  A single hemorrhage can drop a perfect score to 85. Two or more hemorrhages make it impossible to achieve "EXCELENTE" tier.
+</Tip>
+
+### 2. Tumor Touches (Moderate)
+
+Counted when instrument contacts tumor fragments:
+
+```typescript
+tumorFragments.forEach((fragment, index) => {
+  if (cutter.intersectsMesh(fragment, true)) {
+    fragment.dispose();
+    tumorFragments.splice(index, 1);
+    enviarEvento(
+      scalpelMesh.position.x,
+      scalpelMesh.position.y,
+      scalpelMesh.position.z,
+      "TUMOR_TOUCH"
+    );
+  }
+});
+```
+
+**Counting Logic:**
+```python
+tumor_touches = (df["event"] == "TUMOR_TOUCH").sum()
+```
+
+### 3. Economy of Movement (Efficiency)
+
+Ratio of total path length to direct distance:
+
+```python
+total_dist = dist.sum()
+p1 = np.array([df["x"].iloc[0], df["y"].iloc[0], df["z"].iloc[0]])
+p2 = np.array([df["x"].iloc[-1], df["y"].iloc[-1], df["z"].iloc[-1]])
+direct_dist = np.linalg.norm(p2 - p1)
+economia = total_dist / direct_dist if direct_dist > 0 else 1.0
+```
+
+**Interpretation:**
+- **1.0x**: Perfect efficiency (straight line)
+- **1.2x**: 20% longer than ideal (acceptable)
+- **1.5x**: 50% longer (penalty threshold)
+- **2.0x**: 100% longer (severe inefficiency)
+
+<Note>
+  Economy of movement is **not** continuously penalized - only when exceeding 1.5x threshold.
+</Note>
+
+## Scoring Examples
+
+### Example 1: Near-Perfect Performance
+
+```python
+m = {"economia": 1.15, ...}  # Excellent efficiency
+r = {"touches": 2, "hemorrhages": 0}  # Minimal errors
+
+score = 100.0
+score -= 2 * 8  # -16 for touches
+score -= 0 * 15  # No hemorrhages
+# economia < 1.5, no penalty
+
+Final Score: 84 (✅ BUENO)
+```
+
+### Example 2: Critical Errors
+
+```python
+m = {"economia": 1.3, ...}
+r = {"touches": 5, "hemorrhages": 2}
+
+score = 100.0
+score -= 5 * 8   # -40 for touches
+score -= 2 * 15  # -30 for hemorrhages
+# economia < 1.5, no penalty
+
+Final Score: 30 (❌ DEFICIENTE)
+```
+
+### Example 3: Poor Efficiency
+
+```python
+m = {"economia": 1.82, ...}  # Inefficient path
+r = {"touches": 3, "hemorrhages": 0}
+
+score = 100.0
+score -= 3 * 8   # -24 for touches
+score -= 0 * 15  # No hemorrhages
+score -= 10      # -10 for economia > 1.5
+
+Final Score: 66 (⚠️ MEJORABLE)
+```
+
+## Supporting Metrics
+
+While not directly affecting the score, these metrics appear in feedback:
+
+<CardGroup cols={2}>
+  <Card title="Precision vs Ideal" icon="crosshairs">
+    Percentage score based on deviation from straight-line path
+  </Card>
+  <Card title="Smoothness (Jerk)" icon="wave-sine">
+    Rate of acceleration change - indicator of hand steadiness
+  </Card>
+  <Card title="Duration" icon="clock">
+    Total simulation time - context for efficiency
+  </Card>
+  <Card title="Average Velocity" icon="gauge">
+    Mean instrument speed - indicates confidence level
+  </Card>
+</CardGroup>
+
+### Precision Calculation
+
+```python
+def _paso3_benchmarking(df: pd.DataFrame) -> Dict:
+    p_start = np.array([df["x"].iloc[0], df["y"].iloc[0], df["z"].iloc[0]])
+    p_end = np.array([df["x"].iloc[-1], df["y"].iloc[-1], df["z"].iloc[-1]])
+    
+    def dist_to_line(p, a, b):
+        return np.linalg.norm(np.cross(b-a, a-p)) / np.linalg.norm(b-a)
+    
+    desviaciones = [dist_to_line(
+        np.array([r.x, r.y, r.z]), p_start, p_end
+    ) for r in df.itertuples()]
+    
+    return {
+        "precision": max(0, 100 - np.mean(desviaciones) * 10)
+    }
+```
+
+<Tip>
+  Precision < 70% triggers a specific recommendation in the feedback, even though it doesn't directly affect the score.
+</Tip>
+
+## Feedback Generation
+
+The scoring system generates structured markdown feedback:
+
+```python
+feedback = f"""### {status} - Score: {score:.1f}/100
+
+#### 🚨 ALERTAS CRÍTICAS
+- Hemorragias: {r["hemorrhages"]} {"(REVISAR TÉCNICA)" if r["hemorrhages"] > 0 else "(Ninguna)"}
+- Contactos Tumor: {r["touches"]}
+- Cuadrantes de Riesgo: {", ".join(r["cuadrantes"]) if r["cuadrantes"] else "Ninguno"}
+
+#### 📊 MÉTRICAS DE DESTREZA
+- **Economía de Movimiento:** {m["economia"]:.2f}x (Ideal < 1.2x)
+- **Fluidez (Jerk Promedio):** {m["j_avg"]:.2f} 
+- **Precisión vs Patrón Oro:** {b["precision"]:.1f}%
+
+#### 📈 ESTADÍSTICAS
+- **Duración Total:** {m["duration"]:.1f}s
+- **Distancia Recorrida:** {m["total_dist"]:.2f} unidades
+- **Velocidad Promedio:** {m["v_avg"]:.2f} u/s
+
+#### 💡 RECOMENDACIONES
+"""
+```
+
+### Conditional Recommendations
+
+Recommendations are added based on specific performance gaps:
+
+```python
+if r["hemorrhages"] > 0:
+    feedback += "- Priorizar control vascular en cuadrantes críticos.\n"
+if m["economia"] > 1.8:
+    feedback += "- Planificar trayectorias más directas para reducir fatiga.\n"
+if b["precision"] < 70:
+    feedback += "- Mantener mayor estabilidad en la ejecución del path ideal.\n"
+if score < 80:
+    feedback += "- Incrementar práctica en simulador para mejorar coordinación motora.\n"
+```
+
+<Accordion title="Recommendation Triggers">
+  - **Hemorrhages > 0**: Vascular control advice
+  - **Economy > 1.8x**: Path planning guidance
+  - **Precision < 70%**: Stability improvement suggestion
+  - **Score < 80**: General practice recommendation
+</Accordion>
+
+## Spatial Risk Analysis
+
+The system identifies problematic surgical quadrants:
+
+```python
+mid_x = (df["x"].max() + df["x"].min()) / 2
+mid_y = (df["y"].max() + df["y"].min()) / 2
+
+problemas = df[df["event"].isin(["TUMOR_TOUCH", "HEMORRHAGE"])]
+cuadrantes_criticos = []
+if not problemas.empty:
+    for p in problemas.itertuples():
+        pos = ""
+        pos += "Sup" if p.y > mid_y else "Inf"
+        pos += "-Der" if p.x > mid_x else "-Izq"
+        if pos not in cuadrantes_criticos:
+            cuadrantes_criticos.append(pos)
+```
+
+**Quadrant Labels:**
+- **Sup-Der**: Superior-Right
+- **Sup-Izq**: Superior-Left
+- **Inf-Der**: Inferior-Right
+- **Inf-Izq**: Inferior-Left
+
+<Note>
+  Quadrant analysis helps surgeons understand spatial patterns in their errors for targeted improvement.
+</Note>
+
+## Score Interpretation Guidelines
+
+<Accordion title="What does my score mean?">
+  **90-100 (EXCELENTE)**
+  - Maximum 1-2 tumor touches
+  - Zero hemorrhages
+  - Excellent path efficiency
+  - Ready for advanced procedures
+  
+  **75-89 (BUENO)**
+  - 2-3 tumor touches acceptable
+  - At most 1 hemorrhage
+  - Good efficiency with minor deviations
+  - Competent for standard procedures
+  
+  **60-74 (MEJORABLE)**
+  - 4-6 tumor touches
+  - 1-2 hemorrhages
+  - Noticeable inefficiency
+  - Requires focused practice
+  
+  **0-59 (DEFICIENTE)**
+  - Excessive errors (7+ touches or 3+ hemorrhages)
+  - Very poor efficiency (>1.5x)
+  - Fundamental skill gaps
+  - Needs extensive training
+</Accordion>
+
+## Algorithmic Fairness
+
+The scoring system is designed to be:
+
+<CardGroup cols={2}>
+  <Card title="Objective" icon="balance-scale">
+    Based purely on measurable physical metrics and event counts
+  </Card>
+  <Card title="Reproducible" icon="repeat">
+    Same movements always produce same score
+  </Card>
+  <Card title="Transparent" icon="eye">
+    All penalty calculations visible in code
+  </Card>
+  <Card title="Calibrated" icon="sliders">
+    Penalty weights tuned to surgical severity
+  </Card>
+</CardGroup>
+
+## Future Enhancements
+
+Planned improvements to the scoring algorithm:
+
+- **Weighted Penalties**: Different penalties based on tumor size/location
+- **Time Bonuses**: Reward optimal completion times
+- **Difficulty Scaling**: Adjust scores based on procedure complexity
+- **Percentile Rankings**: Compare against cohort of similar experience levels
+- **Trend Analysis**: Track improvement over multiple sessions
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="AI Analysis" href="/features/ai-analysis">
+    Understand the complete 5-step analysis pipeline
+  </Card>
+  <Card title="3D Simulation" href="/features/simulation">
+    Learn about the Babylon.js simulation that generates telemetry
+  </Card>
+</CardGroup>

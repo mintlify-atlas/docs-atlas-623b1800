@@ -1,0 +1,483 @@
+---
+title: 'Simulation WebSocket Channel'
+description: 'Real-time surgical telemetry streaming via /ws/simulation endpoint'
+---
+
+## Overview
+
+The `/ws/simulation` WebSocket channel enables real-time streaming of surgical telemetry data from Unity-based surgical simulations to the Justina backend. Surgeons connect to this channel to transmit movement coordinates, surgical events, and timestamps during active simulation sessions.
+
+## Connection
+
+### Endpoint
+
+```
+ws://localhost:8080/ws/simulation?token=<jwt-token>
+```
+
+### Authentication
+
+<Note>
+Requires a valid JWT token with **ROLE_SURGEON** (or **ROLE_CIRUJANO**). AI accounts cannot connect to this channel.
+</Note>
+
+### Connection Example
+
+<CodeGroup>
+
+```javascript JavaScript/TypeScript
+const token = localStorage.getItem('jwt_token');
+const ws = new WebSocket(`ws://localhost:8080/ws/simulation?token=${token}`);
+
+ws.onopen = () => {
+  console.log('🔗 Connected to simulation channel');
+};
+
+ws.onerror = (error) => {
+  console.error('❌ Connection error:', error);
+};
+
+ws.onclose = (event) => {
+  console.log(`🔌 Disconnected: ${event.code} - ${event.reason}`);
+};
+
+ws.onmessage = (event) => {
+  const response = JSON.parse(event.data);
+  console.log('📨 Server response:', response);
+};
+```
+
+```python Python
+import websocket
+import json
+
+token = "your-jwt-token-here"
+
+def on_message(ws, message):
+    response = json.loads(message)
+    print(f"📨 Server response: {response}")
+
+def on_error(ws, error):
+    print(f"❌ Error: {error}")
+
+def on_close(ws, close_status_code, close_msg):
+    print(f"🔌 Disconnected: {close_status_code} - {close_msg}")
+
+def on_open(ws):
+    print("🔗 Connected to simulation channel")
+
+ws = websocket.WebSocketApp(
+    f"ws://localhost:8080/ws/simulation?token={token}",
+    on_open=on_open,
+    on_message=on_message,
+    on_error=on_error,
+    on_close=on_close
+)
+
+ws.run_forever()
+```
+
+```csharp Unity C#
+using System;
+using WebSocketSharp;
+using UnityEngine;
+
+public class SimulationWebSocket : MonoBehaviour
+{
+    private WebSocket ws;
+    private string jwtToken;
+
+    void Start()
+    {
+        jwtToken = PlayerPrefs.GetString("jwt_token");
+        ws = new WebSocket($"ws://localhost:8080/ws/simulation?token={jwtToken}");
+
+        ws.OnOpen += (sender, e) =>
+        {
+            Debug.Log("🔗 Connected to simulation channel");
+        };
+
+        ws.OnMessage += (sender, e) =>
+        {
+            Debug.Log($"📨 Server response: {e.Data}");
+        };
+
+        ws.OnError += (sender, e) =>
+        {
+            Debug.LogError($"❌ WebSocket error: {e.Message}");
+        };
+
+        ws.OnClose += (sender, e) =>
+        {
+            Debug.Log($"🔌 Disconnected: {e.Code} - {e.Reason}");
+        };
+
+        ws.Connect();
+    }
+}
+```
+
+</CodeGroup>
+
+## Message Protocol
+
+### Client → Server: Telemetry Data
+
+Clients send surgical telemetry messages in JSON format:
+
+<ParamField body="coordinates" type="double[]" required>
+  3D coordinates of the surgical instrument
+  - Array length: 2 or 3 elements
+  - Format: `[x, y, z]` or `[x, y]`
+  - Example: `[10.5, 20.3, 15.7]`
+</ParamField>
+
+<ParamField body="event" type="SurgeryEvent" required>
+  Type of surgical event occurring
+  
+  Valid values:
+  - `START` - Surgery session begins
+  - `NONE` - Normal movement, no special event
+  - `TUMOR_TOUCH` - Instrument touched tumor
+  - `HEMORRHAGE` - Hemorrhage occurred
+  - `FINISH` - Surgery session ends
+</ParamField>
+
+<ParamField body="timestamp" type="long" required>
+  Unix timestamp in milliseconds
+  - Must be a positive number
+  - Example: `1709636400000`
+</ParamField>
+
+### Telemetry Message Examples
+
+<CodeGroup>
+
+```json START Event
+{
+  "coordinates": [10.5, 20.3, 15.7],
+  "event": "START",
+  "timestamp": 1709636400000
+}
+```
+
+```json Normal Movement
+{
+  "coordinates": [10.8, 20.5, 15.9],
+  "event": "NONE",
+  "timestamp": 1709636401500
+}
+```
+
+```json Tumor Touch Event
+{
+  "coordinates": [11.2, 21.0, 16.2],
+  "event": "TUMOR_TOUCH",
+  "timestamp": 1709636402750
+}
+```
+
+```json Hemorrhage Event
+{
+  "coordinates": [11.5, 21.3, 16.5],
+  "event": "HEMORRHAGE",
+  "timestamp": 1709636403200
+}
+```
+
+```json FINISH Event
+{
+  "coordinates": [12.0, 22.0, 17.0],
+  "event": "FINISH",
+  "timestamp": 1709637330000
+}
+```
+
+</CodeGroup>
+
+### Server → Client: Completion Response
+
+When a surgery is finished (FINISH event received), the server responds with:
+
+<ResponseField name="status" type="string">
+  Operation status, always `"SAVED"` on success
+</ResponseField>
+
+<ResponseField name="surgeryId" type="UUID">
+  Unique identifier of the saved surgery session
+</ResponseField>
+
+```json Surgery Saved Response
+{
+  "status": "SAVED",
+  "surgeryId": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+<Note>
+The server only sends a response after receiving a `FINISH` event. All other telemetry messages are acknowledged silently.
+</Note>
+
+## Complete Workflow Example
+
+<Steps>
+  <Step title="Surgeon Authenticates">
+    Surgeon logs in and receives JWT token
+  </Step>
+  <Step title="Connect to WebSocket">
+    Establish WebSocket connection with token parameter
+  </Step>
+  <Step title="Start Surgery">
+    Send START event with initial coordinates
+  </Step>
+  <Step title="Stream Movements">
+    Continuously send telemetry data during surgery
+    - Send coordinates at regular intervals (e.g., 60 FPS)
+    - Include appropriate event types when they occur
+  </Step>
+  <Step title="End Surgery">
+    Send FINISH event with final coordinates
+  </Step>
+  <Step title="Receive Confirmation">
+    Server responds with `SAVED` status and surgery ID
+  </Step>
+  <Step title="AI Notification">
+    Backend automatically notifies AI systems via `/ws/ai` channel
+  </Step>
+</Steps>
+
+### Full Implementation Example
+
+<CodeGroup>
+
+```javascript JavaScript/TypeScript
+class SurgerySimulation {
+  constructor(token) {
+    this.ws = new WebSocket(`ws://localhost:8080/ws/simulation?token=${token}`);
+    this.setupHandlers();
+  }
+
+  setupHandlers() {
+    this.ws.onopen = () => {
+      console.log('✅ Connected');
+      this.startSurgery();
+    };
+
+    this.ws.onmessage = (event) => {
+      const response = JSON.parse(event.data);
+      if (response.status === 'SAVED') {
+        console.log(`✅ Surgery saved: ${response.surgeryId}`);
+        this.ws.close();
+      }
+    };
+  }
+
+  startSurgery() {
+    this.sendTelemetry([0, 0, 0], 'START');
+  }
+
+  sendTelemetry(coordinates, event = 'NONE') {
+    const message = {
+      coordinates: coordinates,
+      event: event,
+      timestamp: Date.now()
+    };
+    this.ws.send(JSON.stringify(message));
+  }
+
+  finishSurgery(finalCoords) {
+    this.sendTelemetry(finalCoords, 'FINISH');
+  }
+}
+
+// Usage
+const simulation = new SurgerySimulation('your-jwt-token');
+
+// During surgery loop
+setInterval(() => {
+  const coords = [Math.random() * 100, Math.random() * 100, Math.random() * 100];
+  simulation.sendTelemetry(coords, 'NONE');
+}, 100); // 10 FPS
+
+// End surgery after 5 seconds
+setTimeout(() => {
+  simulation.finishSurgery([50, 50, 50]);
+}, 5000);
+```
+
+```python Python
+import websocket
+import json
+import time
+import threading
+
+class SurgerySimulation:
+    def __init__(self, token):
+        self.ws = websocket.WebSocketApp(
+            f"ws://localhost:8080/ws/simulation?token={token}",
+            on_open=self.on_open,
+            on_message=self.on_message
+        )
+        self.running = False
+
+    def on_open(self, ws):
+        print("✅ Connected")
+        self.start_surgery()
+        self.running = True
+        threading.Thread(target=self.simulation_loop).start()
+
+    def on_message(self, ws, message):
+        response = json.loads(message)
+        if response.get('status') == 'SAVED':
+            print(f"✅ Surgery saved: {response['surgeryId']}")
+            self.running = False
+            self.ws.close()
+
+    def send_telemetry(self, coordinates, event='NONE'):
+        message = {
+            'coordinates': coordinates,
+            'event': event,
+            'timestamp': int(time.time() * 1000)
+        }
+        self.ws.send(json.dumps(message))
+
+    def start_surgery(self):
+        self.send_telemetry([0, 0, 0], 'START')
+
+    def simulation_loop(self):
+        import random
+        while self.running:
+            coords = [random.random() * 100 for _ in range(3)]
+            self.send_telemetry(coords, 'NONE')
+            time.sleep(0.1)  # 10 FPS
+
+    def finish_surgery(self):
+        self.send_telemetry([50, 50, 50], 'FINISH')
+
+    def run(self):
+        self.ws.run_forever()
+
+# Usage
+sim = SurgerySimulation('your-jwt-token')
+threading.Thread(target=sim.run).start()
+time.sleep(5)
+sim.finish_surgery()
+```
+
+</CodeGroup>
+
+## Error Handling
+
+### Validation Errors
+
+If the telemetry message fails validation, the connection is closed with `1003 BAD_DATA`:
+
+```javascript
+ws.onclose = (event) => {
+  if (event.code === 1003) {
+    console.error('❌ Invalid message format');
+    // Common issues:
+    // - Missing required fields
+    // - Invalid event type
+    // - Negative timestamp
+    // - Coordinates array wrong size
+  }
+};
+```
+
+**Validation rules:**
+- `coordinates` must be an array of 2 or 3 doubles
+- `event` must be a valid SurgeryEvent enum value
+- `timestamp` must be a positive number
+
+### Authentication Errors
+
+Invalid or missing token results in `1008 POLICY_VIOLATION`:
+
+```javascript
+ws.onclose = (event) => {
+  if (event.code === 1008) {
+    console.error('❌ Authentication failed');
+    // Redirect to login to get new token
+    window.location.href = '/login';
+  }
+};
+```
+
+## Backend Processing
+
+The backend performs these actions on telemetry receipt:
+
+<Steps>
+  <Step title="Parse JSON">
+    Deserialize incoming message to TelemetryDTO
+  </Step>
+  <Step title="Validate Data">
+    Check all validation constraints
+  </Step>
+  <Step title="Extract User ID">
+    Retrieve surgeon ID from WebSocket session attributes
+  </Step>
+  <Step title="Create/Update Session">
+    Get or create SurgerySession object for this connection
+  </Step>
+  <Step title="Record Movement">
+    Add movement to session's trajectory list
+  </Step>
+  <Step title="Check for FINISH">
+    If FINISH event:
+    - Mark surgery as ended
+    - Persist to database
+    - Generate surgery ID
+    - Send confirmation to client
+    - Notify AI systems
+  </Step>
+</Steps>
+
+## Session Management
+
+Each WebSocket connection maintains an in-memory `SurgerySession` object:
+
+- **Session Creation**: First message creates new session
+- **Movement Accumulation**: All movements stored in session
+- **Session Persistence**: FINISH event triggers database save
+- **Session Cleanup**: Session removed from memory after save
+
+<Warning>
+If a surgeon disconnects before sending FINISH, the session data is lost and not persisted to the database.
+</Warning>
+
+## Performance Considerations
+
+### Message Frequency
+
+Recommended telemetry transmission rates:
+
+- **High precision**: 60 messages/second (60 FPS)
+- **Standard**: 30 messages/second (30 FPS)
+- **Low bandwidth**: 10 messages/second (10 FPS)
+
+### Connection Limits
+
+- One active simulation session per surgeon
+- Multiple connections with same token create separate sessions
+
+### Message Size
+
+Typical telemetry message size: ~100 bytes
+
+Estimated bandwidth:
+- 60 FPS: ~6 KB/s upload
+- 30 FPS: ~3 KB/s upload
+- 10 FPS: ~1 KB/s upload
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="AI Channel" icon="microchip" href="/api/ai-channel">
+    Learn how AI systems receive surgery notifications
+  </Card>
+  <Card title="Surgery Endpoints" icon="file-medical" href="/api/surgery-endpoints">
+    Access saved trajectory data via REST API
+  </Card>
+</CardGroup>

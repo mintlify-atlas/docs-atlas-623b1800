@@ -1,80 +1,559 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick Start Guide
+description: Get Justina running locally in under 10 minutes with this step-by-step guide
 ---
 
-## Get started in three steps
+## Prerequisites
 
-Get your documentation site running locally and make your first customization.
-
-### Step 1: Set up your local environment
-
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
+Before starting, ensure you have the following installed:
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Java Development Kit" icon="java">
+    **Version**: JDK 21 or higher
+    
+    Verify: `java -version`
+  </Card>
+  <Card title="Apache Maven" icon="box">
+    **Version**: Maven 3.9 or higher
+    
+    Verify: `mvn -version`
+  </Card>
+  <Card title="Node.js & npm" icon="node-js">
+    **Version**: Node.js 20+ and npm 10+
+    
+    Verify: `node -v && npm -v`
+  </Card>
+  <Card title="Python" icon="python">
+    **Version**: Python 3.8 or higher
+    
+    Verify: `python3 --version`
+  </Card>
 </CardGroup>
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+**Optional**: Docker and Docker Compose for containerized deployment (recommended for production)
 </Note>
+
+## Installation Steps
+
+<Steps>
+  <Step title="Clone the Repository">
+    Get the Justina source code from the repository:
+
+    ```bash
+    git clone <repository-url>
+    cd S02-26-Equipo-24-Web-App-Development
+    ```
+
+    The repository structure:
+
+    ```
+    S02-26-Equipo-24-Web-App-Development/
+    ├── backend/        # Spring Boot backend
+    ├── frontend/       # Next.js frontend
+    └── ia/            # Python AI service
+    ```
+  </Step>
+
+  <Step title="Configure Environment Variables">
+    Create environment configuration for the backend. The backend uses H2 in-memory database by default (perfect for development).
+
+    **Backend Configuration** (optional - defaults work out of the box):
+
+    ```bash
+    cd backend
+    ```
+
+    Create a `.env` file or set environment variables:
+
+    ```bash
+    # Server Configuration
+    PORT=8080
+
+    # JWT Secret (REQUIRED - use a strong secret in production)
+    JWT_SECRET_KEY=your-super-secret-jwt-key-change-in-production
+
+    # Database (H2 in-memory - default)
+    SPRING_DATASOURCE_URL=jdbc:h2:mem:justina
+    SPRING_DATASOURCE_USERNAME=sa
+    SPRING_DATASOURCE_PASSWORD=
+    SPRING_DATASOURCE_DRIVER_CLASS_NAME=org.h2.Driver
+    SPRING_JPA_HIBERNATE_DDL_AUTO=create-drop
+    SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT=org.hibernate.dialect.H2Dialect
+    ```
+
+    <Warning>
+    **Production Note**: Never use the H2 in-memory database in production. Switch to PostgreSQL and use a strong JWT secret key.
+    </Warning>
+
+    **Frontend Configuration**:
+
+    ```bash
+    cd ../frontend
+    ```
+
+    Create `.env.local`:
+
+    ```bash
+    NEXT_PUBLIC_API_URL=http://localhost:8080
+    NEXT_PUBLIC_WS_URL=ws://localhost:8080
+    ```
+
+    **AI Service Configuration**:
+
+    ```bash
+    cd ../ia
+    ```
+
+    Create `.env`:
+
+    ```bash
+    BASE_URL=http://localhost:8080
+    IA_USERNAME=ia_justina
+    IA_PASSWORD=ia_secret_2024
+    ```
+  </Step>
+
+  <Step title="Start the Backend">
+    The backend must be started first as it provides the API for other services.
+
+    ```bash
+    cd backend
+
+    # Build the project (skip tests for faster startup)
+    ./mvnw clean install -DskipTests
+
+    # Run the application
+    ./mvnw spring-boot:run
+    ```
+
+    <Note>
+    On Windows, use `mvnw.cmd` instead of `./mvnw`
+    </Note>
+
+    **Alternative: Run the JAR directly**
+
+    ```bash
+    # Build JAR
+    ./mvnw clean package -DskipTests
+
+    # Run JAR
+    java -jar target/Justina-0.0.1-SNAPSHOT.jar
+    ```
+
+    **Verify Backend is Running**:
+
+    The backend should start on port `8080`. Check the console for:
+
+    ```
+    Started JustinaApplication in X.XXX seconds
+    ```
+
+    Access the API documentation at:
+
+    ```
+    http://localhost:8080/swagger-ui/index.html
+    ```
+
+    <Card title="Default Users" icon="user">
+      The backend initializes with two default accounts:
+
+      **Surgeon Account**:
+      - Username: `surgeon_master`
+      - Password: `justina2024`
+      - Role: `ROLE_SURGEON`
+
+      **AI Service Account**:
+      - Username: `ia_justina`
+      - Password: `ia_secret_2024`
+      - Role: `ROLE_IA`
+    </Card>
+  </Step>
+
+  <Step title="Start the Frontend">
+    Open a new terminal window for the frontend.
+
+    ```bash
+    cd frontend
+
+    # Install dependencies
+    npm install
+
+    # Start development server
+    npm run dev
+    ```
+
+    **Alternative package managers**:
+
+    ```bash
+    # Using Yarn
+    yarn install
+    yarn dev
+
+    # Using pnpm
+    pnpm install
+    pnpm dev
+    ```
+
+    The frontend will start on `http://localhost:3000`.
+
+    **Verify Frontend is Running**:
+
+    Open your browser and navigate to:
+
+    ```
+    http://localhost:3000
+    ```
+
+    You should see the Justina login page.
+  </Step>
+
+  <Step title="Start the AI Service (Optional)">
+    The AI service processes surgical data and provides analysis. It's optional for basic testing but required for receiving AI feedback.
+
+    Open a new terminal window:
+
+    ```bash
+    cd ia
+
+    # Install Python dependencies
+    pip install -r requirements.txt
+
+    # Start the AI WebSocket client
+    python websocket_client.py
+    ```
+
+    **Verify AI Service is Running**:
+
+    You should see:
+
+    ```
+    ╔════════════════════════════════════════════════════════╗
+    ║   JUSTINA - CLIENTE IA CON WEBSOCKET                  ║
+    ║   Escuchando notificaciones en tiempo real...         ║
+    ╚════════════════════════════════════════════════════════╝
+
+    🔌 WebSocket conectado exitosamente
+    👂 Esperando notificaciones del backend...
+    ```
+
+    <Note>
+    **Alternative Mode**: You can also run the AI service in manual mode using `python main.py` to process surgeries by ID instead of listening to WebSocket notifications.
+    </Note>
+  </Step>
+</Steps>
+
+## First Simulation
+
+Now that all services are running, let's perform your first surgical simulation.
+
+<Steps>
+  <Step title="Login to the Platform">
+    Navigate to `http://localhost:3000` in your browser.
+
+    Use the default surgeon credentials:
+
+    ```
+    Username: surgeon_master
+    Password: justina2024
+    ```
+
+    Click the **Login** button.
+  </Step>
+
+  <Step title="Access the Simulation Dashboard">
+    After successful login, you'll be redirected to the dashboard where you can:
+
+    - Start a new simulation
+    - View past surgeries
+    - Check your performance statistics
+  </Step>
+
+  <Step title="Start a Simulation">
+    Click on **"Start New Simulation"** or the simulation module card.
+
+    You'll be taken to the 3D surgical environment powered by Babylon.js.
+
+    **What you'll see**:
+    - 3D surgical scene with instruments
+    - Interactive controls for manipulation
+    - Real-time telemetry connection status
+
+    <Note>
+    The WebSocket connection is established automatically when the simulation loads. Check the browser console for connection logs.
+    </Note>
+  </Step>
+
+  <Step title="Perform the Simulation">
+    Interact with the surgical instruments using your mouse:
+
+    - **Left Click + Drag**: Move instruments in the XY plane
+    - **Right Click + Drag**: Rotate camera view
+    - **Scroll**: Zoom in/out
+
+    The system tracks every movement in real-time:
+
+    ```typescript
+    // Telemetry data structure sent to backend
+    {
+      "coordinates": { "x": 10.5, "y": 20.3, "z": 15.7 },
+      "event": "MOVE",
+      "timestamp": "2024-01-15T10:30:00Z"
+    }
+    ```
+
+    **Events tracked**:
+    - `START`: Simulation begins
+    - `MOVE`: Instrument movement
+    - `TUMOR_TOUCH`: Contact with tumor (critical event)
+    - `HEMORRHAGE`: Hemorrhage occurrence (critical event)
+    - `FINISH`: Simulation completes
+  </Step>
+
+  <Step title="Complete the Simulation">
+    Click the **"Finish Surgery"** button when done.
+
+    The system will:
+    1. Send a `FINISH` event via WebSocket
+    2. Close the WebSocket connection
+    3. Save the surgery session to the database
+    4. Return a surgery UUID
+
+    **Backend response**:
+
+    ```json
+    {
+      "status": "SAVED",
+      "surgeryId": "550e8400-e29b-41d4-a716-446655440000"
+    }
+    ```
+
+    This ID is stored in cookies and localStorage for later retrieval.
+  </Step>
+
+  <Step title="View AI Analysis">
+    If the AI service is running, it will automatically:
+
+    1. Receive a WebSocket notification about the new surgery
+    2. Fetch the trajectory data via REST API
+    3. Process through the 5-step analysis pipeline
+    4. Send the results back to the backend
+
+    **Console output from AI service**:
+
+    ```
+    📡 MENSAJE RAW DEL SERVIDOR WEBSOCKET:
+    {"event":"NEW_SURGERY","surgeryId":"550e8400-e29b-41d4-a716-446655440000"}
+
+    🏥 INICIANDO ANÁLISIS: 550e8400-e29b-41d4-a716-446655440000
+    📊 Paso 1: Obteniendo trayectoria...
+    🧠 Paso 2: Analizando con pipeline de 5 pasos...
+    ✅ Análisis completado - Score: 87.5/100
+    📤 Paso 3: Enviando análisis al backend...
+    🎉 ¡Cirugía procesada exitosamente!
+    ```
+
+    Access the analysis report through the dashboard or via API:
+
+    ```bash
+    curl http://localhost:8080/api/v1/surgeries/550e8400-e29b-41d4-a716-446655440000 \
+      -H "Authorization: Bearer YOUR_JWT_TOKEN"
+    ```
+  </Step>
+</Steps>
+
+## Testing the API
+
+Justina provides a complete REST API documented with OpenAPI/Swagger.
+
+### Access Swagger UI
+
+Navigate to:
+
+```
+http://localhost:8080/swagger-ui/index.html
+```
+
+### Authentication Flow
+
+<CodeGroup>
+```bash cURL
+# Login to get JWT token
+curl -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "surgeon_master",
+    "password": "justina2024"
+  }'
+```
+
+```javascript JavaScript
+const response = await fetch('http://localhost:8080/api/v1/auth/login', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    username: 'surgeon_master',
+    password: 'justina2024'
+  })
+});
+
+const { token } = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'http://localhost:8080/api/v1/auth/login',
+    json={
+        'username': 'surgeon_master',
+        'password': 'justina2024'
+    }
+)
+
+token = response.json()['token']
+```
+</CodeGroup>
+
+**Response**:
+
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "username": "surgeon_master",
+  "role": "ROLE_SURGEON"
+}
+```
+
+### Fetch Surgery Data
+
+<CodeGroup>
+```bash cURL
+# Get surgery trajectory
+curl http://localhost:8080/api/v1/surgeries/550e8400-e29b-41d4-a716-446655440000/trajectory \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+```javascript JavaScript
+const trajectory = await fetch(
+  `http://localhost:8080/api/v1/surgeries/${surgeryId}/trajectory`,
+  {
+    headers: { 'Authorization': `Bearer ${token}` }
+  }
+).then(res => res.json());
+```
+
+```python Python
+headers = {'Authorization': f'Bearer {token}'}
+response = requests.get(
+    f'http://localhost:8080/api/v1/surgeries/{surgery_id}/trajectory',
+    headers=headers
+)
+
+trajectory = response.json()
+```
+</CodeGroup>
+
+**Response**:
+
+```json
+{
+  "surgeryId": "550e8400-e29b-41d4-a716-446655440000",
+  "surgeon": "surgeon_master",
+  "startTime": "2024-01-15T10:25:00Z",
+  "endTime": "2024-01-15T10:35:00Z",
+  "movements": [
+    {
+      "coordinates": [10.5, 20.3, 15.7],
+      "event": "MOVE",
+      "timestamp": 1705315500000
+    }
+  ]
+}
+```
+
+## Troubleshooting
+
+### Backend Won't Start
+
+**Issue**: Port 8080 already in use
+
+```bash
+# Check what's using port 8080
+lsof -i :8080  # macOS/Linux
+netstat -ano | findstr :8080  # Windows
+
+# Kill the process or change the port
+export PORT=8081
+./mvnw spring-boot:run
+```
+
+**Issue**: JWT_SECRET_KEY not set
+
+```bash
+# Set the environment variable
+export JWT_SECRET_KEY="your-secret-key-here"
+./mvnw spring-boot:run
+```
+
+### Frontend Connection Issues
+
+**Issue**: Cannot connect to backend API
+
+Verify your `.env.local` configuration:
+
+```bash
+# frontend/.env.local
+NEXT_PUBLIC_API_URL=http://localhost:8080
+NEXT_PUBLIC_WS_URL=ws://localhost:8080
+```
+
+Restart the dev server after changing environment variables.
+
+**Issue**: WebSocket connection fails
+
+Check the browser console for errors. Common causes:
+- Backend not running
+- JWT token not found in cookies
+- CORS issues (backend should allow frontend origin)
+
+### AI Service Issues
+
+**Issue**: AI service can't authenticate
+
+Verify credentials in `ia/.env`:
+
+```bash
+IA_USERNAME=ia_justina
+IA_PASSWORD=ia_secret_2024
+```
+
+These must match the default AI user created by the backend.
+
+**Issue**: Python dependencies missing
+
+```bash
+# Create virtual environment (recommended)
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Architecture Overview" icon="diagram-project" href="/architecture">
+    Learn about the technical architecture and design patterns
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/overview">
+    Explore all available endpoints and WebSocket protocols
+  </Card>
+  <Card title="Deployment Guide" icon="server" href="/deployment/prerequisites">
+    Deploy Justina to production with Docker and PostgreSQL
+  </Card>
+  <Card title="Environment Variables" icon="gear" href="/deployment/environment-variables">
+    Configuration options for all components
+  </Card>
+</CardGroup>

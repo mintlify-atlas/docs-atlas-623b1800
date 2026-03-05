@@ -1,0 +1,329 @@
+---
+title: "AI System Setup"
+description: "Install and configure the Python-based AI analysis service"
+---
+
+This guide walks you through setting up the Justina AI System on your local machine or server.
+
+## Prerequisites
+
+Before beginning, ensure you have:
+
+<CardGroup cols={2}>
+  <Card title="Python 3.9+" icon="python">
+    Required for running the AI service
+  </Card>
+  <Card title="pip or venv" icon="box">
+    Package manager for installing dependencies
+  </Card>
+  <Card title="Backend Running" icon="server">
+    The Spring Boot backend must be accessible
+  </Card>
+  <Card title="Network Access" icon="wifi">
+    Connection to backend API (default: localhost:8080)
+  </Card>
+</CardGroup>
+
+<Note>
+Python 3.9 or higher is required due to type hints and dictionary merge operators used in the code.
+</Note>
+
+## Installation Steps
+
+<Steps>
+  <Step title="Clone the Repository">
+    First, clone the Justina repository and navigate to the AI directory:
+    
+    ```bash
+    git clone https://github.com/No-Country-simulation/S02-26-Equipo-24-Web-App-Development.git
+    cd S02-26-Equipo-24-Web-App-Development/ia
+    ```
+  </Step>
+  
+  <Step title="Create Virtual Environment">
+    Create and activate a Python virtual environment:
+    
+    <CodeGroup>
+    ```bash Linux/macOS
+    python3 -m venv venv
+    source venv/bin/activate
+    ```
+    
+    ```bash Windows (PowerShell)
+    python -m venv venv
+    .\venv\Scripts\Activate.ps1
+    ```
+    
+    ```bash Windows (CMD)
+    python -m venv venv
+    .\venv\Scripts\activate.bat
+    ```
+    </CodeGroup>
+    
+    <Tip>
+    Using a virtual environment isolates dependencies and prevents conflicts with system packages.
+    </Tip>
+  </Step>
+  
+  <Step title="Install Dependencies">
+    Install all required Python packages:
+    
+    ```bash
+    pip install -r requirements.txt
+    ```
+    
+    This installs:
+    - **requests**: HTTP client for API calls
+    - **pandas**: Data manipulation
+    - **numpy**: Numerical computations
+    - **python-dotenv**: Environment variable management
+    - **websocket-client**: Real-time backend communication
+    - **flask**: Optional REST API server
+  </Step>
+  
+  <Step title="Configure Environment">
+    Create a `.env` file in the `ia/` directory:
+    
+    ```bash config.py
+    BASE_URL=http://localhost:8080
+    IA_USERNAME=ia_justina
+    IA_PASSWORD=ia_secret_2024
+    REQUEST_TIMEOUT=10
+    RETRY_ATTEMPTS=3
+    ```
+    
+    Or modify `config.py` directly:
+    
+    ```python config.py
+    import os
+    from dotenv import load_dotenv
+    
+    load_dotenv()
+    
+    BASE_URL = os.getenv("BASE_URL", "http://localhost:8080")
+    IA_USERNAME = os.getenv("IA_USERNAME", "ia_justina")
+    IA_PASSWORD = os.getenv("IA_PASSWORD", "ia_secret_2024")
+    REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "10"))
+    RETRY_ATTEMPTS = int(os.getenv("RETRY_ATTEMPTS", "3"))
+    ```
+  </Step>
+  
+  <Step title="Verify Backend Connection">
+    Test that the backend is accessible:
+    
+    ```bash
+    curl http://localhost:8080/api/v1/auth/login \
+      -H "Content-Type: application/json" \
+      -d '{"username":"ia_justina","password":"ia_secret_2024"}'
+    ```
+    
+    Expected response:
+    ```json
+    {
+      "username": "ia_justina",
+      "role": "ROLE_IA"
+    }
+    ```
+  </Step>
+</Steps>
+
+## Running the AI Service
+
+The AI system can operate in two modes:
+
+### 1. Manual Mode (main.py)
+
+Interactive CLI for processing individual surgeries:
+
+```bash
+python main.py
+```
+
+**Features**:
+- Interactive menu system
+- Process single surgery by UUID
+- Batch processing capability
+- Manual authentication
+
+**When to use**: Testing, debugging, or one-off analysis
+
+### 2. WebSocket Mode (websocket_client.py)
+
+Automated service that listens for backend notifications:
+
+```bash
+python websocket_client.py
+```
+
+**Features**:
+- Automatic authentication
+- Real-time surgery notifications
+- Automatic analysis and submission
+- Reconnection on failure
+
+**When to use**: Production deployment, continuous operation
+
+<Tip>
+WebSocket mode is recommended for production as it automatically processes surgeries as they complete.
+</Tip>
+
+## Configuration Options
+
+### Backend URL
+
+If your backend runs on a different host or port:
+
+```python
+BASE_URL = "http://192.168.1.100:8080"  # Remote server
+BASE_URL = "https://api.justina.com"    # Production with HTTPS
+```
+
+### Authentication
+
+The default AI credentials are:
+
+- **Username**: `ia_justina`
+- **Password**: `ia_secret_2024`
+- **Role**: `ROLE_IA`
+
+<Warning>
+Change these credentials in production! Update both the backend user and the AI config.
+</Warning>
+
+### Timeouts and Retries
+
+```python
+REQUEST_TIMEOUT = 10      # Seconds to wait for API response
+RETRY_ATTEMPTS = 3        # Number of retries on failure
+```
+
+Increase timeout for slow networks or large trajectory datasets.
+
+## Testing the Setup
+
+### Quick Test
+
+Run a test with sample data:
+
+```bash
+python test_pipeline_local.py
+```
+
+This tests the analysis pipeline without requiring backend connectivity.
+
+### End-to-End Test
+
+1. Start the backend
+2. Run the AI service:
+   ```bash
+   python main.py
+   ```
+3. Choose option 2 (batch processing)
+4. Verify analysis completes successfully
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="ModuleNotFoundError: No module named 'pandas'">
+    Ensure you've activated the virtual environment and run `pip install -r requirements.txt`.
+    
+    ```bash
+    source venv/bin/activate  # Activate venv
+    pip install -r requirements.txt
+    ```
+  </Accordion>
+  
+  <Accordion title="Connection refused to http://localhost:8080">
+    The backend isn't running. Start it first:
+    
+    ```bash
+    cd ../backend
+    ./mvnw spring-boot:run
+    ```
+  </Accordion>
+  
+  <Accordion title="401 Unauthorized error">
+    Invalid credentials. Verify `IA_USERNAME` and `IA_PASSWORD` match the backend's default AI user.
+  </Accordion>
+  
+  <Accordion title="WebSocket connection fails immediately">
+    Check that:
+    1. Backend WebSocket endpoint is enabled
+    2. JWT token is valid
+    3. Firewall allows WebSocket connections
+    4. URL uses `ws://` not `http://`
+  </Accordion>
+</AccordionGroup>
+
+## Production Deployment
+
+For production environments:
+
+<Steps>
+  <Step title="Use a Process Manager">
+    Run the AI service with systemd or supervisor:
+    
+    ```ini /etc/systemd/system/justina-ai.service
+    [Unit]
+    Description=Justina AI Analysis Service
+    After=network.target
+    
+    [Service]
+    Type=simple
+    User=justina
+    WorkingDirectory=/opt/justina/ia
+    Environment="PATH=/opt/justina/ia/venv/bin"
+    ExecStart=/opt/justina/ia/venv/bin/python websocket_client.py
+    Restart=always
+    
+    [Install]
+    WantedBy=multi-user.target
+    ```
+    
+    Enable and start:
+    ```bash
+    sudo systemctl enable justina-ai
+    sudo systemctl start justina-ai
+    ```
+  </Step>
+  
+  <Step title="Configure Logging">
+    Add logging to track analysis results:
+    
+    ```python
+    import logging
+    
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler('justina-ai.log'),
+            logging.StreamHandler()
+        ]
+    )
+    ```
+  </Step>
+  
+  <Step title="Set Up Monitoring">
+    Monitor the AI service health:
+    
+    ```bash
+    # Check status
+    systemctl status justina-ai
+    
+    # View logs
+    journalctl -u justina-ai -f
+    ```
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Client Usage" icon="plug" href="/ai/client-usage">
+    Learn how to use the JustinaAIClient class
+  </Card>
+  <Card title="API Integration" icon="code" href="/api/ai-channel">
+    Understand the WebSocket notification system
+  </Card>
+</CardGroup>

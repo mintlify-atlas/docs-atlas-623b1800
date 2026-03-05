@@ -1,97 +1,127 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Justina"
+description: "AI-powered surgical robot simulation platform with real-time telemetry analysis and performance scoring"
 ---
 
-## Setting up
+<div className="flex flex-col items-center justify-center py-12 px-6">
+  <div className="max-w-4xl text-center">
+    <h1 className="text-5xl font-bold text-slate-900 mb-6">
+      Digital Simulation for Surgical Robotics
+    </h1>
+    <p className="text-xl text-slate-600 mb-8 leading-relaxed">
+      Reduce technical, clinical, and economic risk in surgical robot development through advanced digital simulations. 
+      Evaluate human-robot interaction and validate design decisions before building complex hardware.
+    </p>
+  </div>
+</div>
 
-Get your documentation site up and running in minutes.
+## Key Features
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+Justina combines cutting-edge simulation technology with AI-powered analysis to provide comprehensive surgical training and validation.
 
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="3D Surgical Simulation" icon="cube" href="/features/simulation">
+    Immersive 3D surgical environment powered by Babylon.js with realistic robot interaction
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Real-Time Telemetry" icon="wave-pulse" href="/features/real-time-telemetry">
+    WebSocket-based streaming of surgical movements and events for instant feedback
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="AI Performance Analysis" icon="brain-circuit" href="/features/ai-analysis">
+    Advanced 5-step analysis pipeline evaluating dexterity, precision, and risk factors
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="Automated Scoring" icon="chart-line" href="/features/performance-scoring">
+    Comprehensive scoring system with detailed feedback and recommendations
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## Get Started
 
-Everything you need to create world-class documentation.
+<Steps>
+  <Step title="Understand the Platform">
+    Learn about Justina's architecture and core features
+    
+    <Card title="Introduction" icon="book-open" href="/introduction">
+      Explore the platform overview and key capabilities
+    </Card>
+  </Step>
+  
+  <Step title="Quick Start">
+    Get up and running with your first simulation
+    
+    <Card title="Quickstart Guide" icon="rocket" href="/quickstart">
+      Complete setup and run your first surgical simulation
+    </Card>
+  </Step>
+  
+  <Step title="Explore the API">
+    Integrate with the backend services
+    
+    <Card title="API Documentation" icon="code" href="/api/overview">
+      REST endpoints and WebSocket channels for telemetry
+    </Card>
+  </Step>
+</Steps>
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+## Platform Components
 
-## Need inspiration?
+Justina is built on a multi-component architecture designed for scalability and performance.
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<CardGroup cols={3}>
+  <Card title="Backend API" icon="server" href="/api/overview">
+    Spring Boot REST API with JWT authentication and WebSocket support
+  </Card>
+  <Card title="Frontend" icon="browser" href="/guide/dashboard">
+    Next.js application with 3D simulation and interactive dashboard
+  </Card>
+  <Card title="AI System" icon="brain" href="/ai/overview">
+    Python-based analysis pipeline for surgical performance evaluation
+  </Card>
+</CardGroup>
+
+## Use Cases
+
+<AccordionGroup>
+  <Accordion title="Surgical Training & Education">
+    Provide surgeons with a safe, repeatable environment to practice complex procedures and improve their skills without risk to patients.
+  </Accordion>
+  
+  <Accordion title="Robot Design Validation">
+    Test and validate surgical robot designs in simulation before committing to expensive physical prototypes.
+  </Accordion>
+  
+  <Accordion title="Performance Assessment">
+    Objectively measure and track surgical performance over time with AI-powered scoring and detailed analytics.
+  </Accordion>
+  
+  <Accordion title="Human-Robot Interaction Research">
+    Study how surgeons interact with robotic systems and optimize control interfaces for better outcomes.
+  </Accordion>
+</AccordionGroup>
+
+## Technical Highlights
+
+<CardGroup cols={2}>
+  <Card title="Clean Architecture" icon="layer-group">
+    Hexagonal architecture with clear separation between domain, application, and infrastructure layers
+  </Card>
+  <Card title="Real-Time Communication" icon="satellite-dish">
+    WebSocket channels for live telemetry streaming and AI notifications
+  </Card>
+  <Card title="Role-Based Access" icon="shield-check">
+    JWT authentication with surgeon and AI system roles
+  </Card>
+  <Card title="Comprehensive Analytics" icon="chart-mixed">
+    Five-step AI pipeline analyzing dexterity, benchmarking, and risk factors
+  </Card>
+</CardGroup>
+
+## Ready to Begin?
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="play" href="/quickstart">
+    Set up your environment and run your first simulation in minutes
+  </Card>
+  <Card title="View Architecture" icon="sitemap" href="/architecture">
+    Understand how all the components work together
+  </Card>
+</CardGroup>

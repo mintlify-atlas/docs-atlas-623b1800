@@ -1,0 +1,268 @@
+---
+title: 'JWT Authentication'
+description: 'Learn how to authenticate with the Justina API using JSON Web Tokens'
+---
+
+## Overview
+
+The Justina Backend uses **JWT (JSON Web Token)** authentication to secure API endpoints and WebSocket connections. This stateless authentication mechanism ensures that only authorized users can access protected resources.
+
+## Authentication Flow
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant API as Justina API
+    participant JWT as JWT Service
+    participant DB as Database
+
+    Client->>API: POST /api/v1/auth/login
+    Note over Client,API: username + password
+    API->>DB: Validate credentials
+    DB-->>API: User data + role
+    API->>JWT: Generate JWT token
+    JWT-->>API: Signed token (24h expiry)
+    API-->>Client: AuthResponse + Cookie
+    Note over Client,API: Token in body & HttpOnly cookie
+    
+    Client->>API: GET /api/v1/surgeries/{id}/trajectory
+    Note over Client,API: Authorization: Bearer <token>
+    API->>JWT: Validate token
+    JWT-->>API: User ID + Role
+    API-->>Client: Protected resource
+```
+
+## JWT Token Structure
+
+Justina tokens are signed using **HMAC-SHA256** algorithm and contain the following claims:
+
+### Header
+```json
+{
+  "alg": "HS256",
+  "typ": "JWT"
+}
+```
+
+### Payload
+```json
+{
+  "iss": "Justina_Backend",
+  "sub": "surgeon_master",
+  "userId": "550e8400-e29b-41d4-a716-446655440000",
+  "role": "ROLE_SURGEON",
+  "iat": 1709667600,
+  "exp": 1709753999
+}
+```
+
+### Claims Explanation
+
+<ParamField path="iss" type="string">
+  Token issuer, always set to `Justina_Backend`
+</ParamField>
+
+<ParamField path="sub" type="string">
+  Subject - the username of the authenticated user
+</ParamField>
+
+<ParamField path="userId" type="UUID">
+  Unique identifier for the user in UUID format
+</ParamField>
+
+<ParamField path="role" type="string">
+  User role, either `ROLE_SURGEON` or `ROLE_AI`
+</ParamField>
+
+<ParamField path="iat" type="number">
+  Token issued at timestamp (Unix epoch)
+</ParamField>
+
+<ParamField path="exp" type="number">
+  Token expiration timestamp (24 hours from issuance)
+</ParamField>
+
+## Token Expiration
+
+JWT tokens are valid for **24 hours (86400 seconds)** from the time of issuance. After expiration, users must log in again to receive a new token.
+
+<Warning>
+Expired tokens will result in `401 Unauthorized` responses. Implement token refresh logic in your client application.
+</Warning>
+
+## Including JWT in Requests
+
+### Method 1: Authorization Header (Recommended)
+
+Include the JWT token in the `Authorization` header with the `Bearer` scheme:
+
+```bash
+curl -X GET http://localhost:8080/api/v1/auth/me \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+```
+
+```javascript
+// JavaScript/TypeScript example
+fetch('http://localhost:8080/api/v1/auth/me', {
+  headers: {
+    'Authorization': `Bearer ${token}`
+  }
+});
+```
+
+```python
+# Python example
+import requests
+
+headers = {
+    'Authorization': f'Bearer {token}'
+}
+response = requests.get('http://localhost:8080/api/v1/auth/me', headers=headers)
+```
+
+### Method 2: HttpOnly Cookie (Web Clients)
+
+The login endpoint automatically sets an HttpOnly cookie named `jwt-token`. Web browsers will include this cookie in subsequent requests automatically.
+
+**Cookie attributes:**
+- `HttpOnly: true` - Prevents JavaScript access (XSS protection)
+- `Secure: true` - Requires HTTPS in production
+- `SameSite: None` - Allows cross-origin requests
+- `Max-Age: 86400` - 24-hour expiration
+- `Path: /` - Valid for all routes
+
+```javascript
+// Automatic cookie inclusion in fetch
+fetch('http://localhost:8080/api/v1/auth/me', {
+  credentials: 'include'  // Include cookies
+});
+```
+
+<Note>
+Both authentication methods (header and cookie) are validated. Use the Authorization header for non-browser clients and APIs.
+</Note>
+
+## WebSocket Authentication
+
+WebSocket connections require JWT authentication via **query parameter** since WebSocket handshake doesn't support custom headers easily:
+
+```javascript
+const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...';
+const ws = new WebSocket(`ws://localhost:8080/ws/simulation?token=${token}`);
+```
+
+```python
+import websocket
+
+token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+ws = websocket.WebSocket()
+ws.connect(f"ws://localhost:8080/ws/simulation?token={token}")
+```
+
+### Authentication Process
+
+1. Extract `token` from query parameter
+2. Validate JWT signature and expiration
+3. Extract `userId`, `username`, and `role` from token claims
+4. Store user information in WebSocket session attributes
+5. Allow or deny connection based on validation
+
+<Warning>
+WebSocket connections without a valid token or with an expired token will be immediately rejected with `POLICY_VIOLATION` status.
+</Warning>
+
+## Role-Based Authorization
+
+After authentication, authorization is enforced based on user roles:
+
+### ROLE_SURGEON (ROLE_CIRUJANO)
+
+Surgeons can:
+- Access their own surgery trajectories
+- Connect to `/ws/simulation` for telemetry streaming
+- View their user profile
+
+### ROLE_AI (ROLE_IA)
+
+AI systems can:
+- Access all surgery trajectories
+- Submit analysis and scoring data
+- Connect to `/ws/ai` for surgery notifications
+
+## Security Best Practices
+
+<Steps>
+  <Step title="Use HTTPS in Production">
+    Always transmit tokens over HTTPS to prevent interception
+  </Step>
+  <Step title="Store Tokens Securely">
+    - Web: Use HttpOnly cookies or sessionStorage (not localStorage)
+    - Mobile: Use secure keychain/keystore
+    - Backend: Environment variables for JWT secret
+  </Step>
+  <Step title="Implement Token Refresh">
+    Request new tokens before expiration to maintain user sessions
+  </Step>
+  <Step title="Validate on Every Request">
+    The backend validates token signature and expiration automatically
+  </Step>
+  <Step title="Rotate JWT Secrets">
+    Periodically update the `JWT_SECRET_KEY` environment variable
+  </Step>
+</Steps>
+
+## Password Security
+
+Passwords are hashed using **BCrypt** with automatic salt generation before storage. Plain-text passwords are never stored in the database.
+
+```java
+// Backend implementation (for reference)
+String hashedPassword = BCrypt.hashpw(plainPassword, BCrypt.gensalt());
+```
+
+## Error Responses
+
+### 401 Unauthorized
+
+```json
+{
+  "timestamp": "2024-03-05T10:30:00",
+  "status": 401,
+  "error": "Unauthorized",
+  "message": "Full authentication is required to access this resource",
+  "path": "/api/v1/auth/me"
+}
+```
+
+**Common causes:**
+- Missing Authorization header
+- Invalid or malformed token
+- Expired token
+- Invalid JWT signature
+
+### 403 Forbidden
+
+```json
+{
+  "timestamp": "2024-03-05T10:30:00",
+  "status": 403,
+  "error": "Forbidden",
+  "message": "Access denied",
+  "path": "/api/v1/surgeries/123/analysis"
+}
+```
+
+**Common causes:**
+- Insufficient role permissions
+- Surgeon accessing another surgeon's data
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Auth Endpoints" icon="right-to-bracket" href="/api/auth-endpoints">
+    Learn how to login, register, and get user info
+  </Card>
+  <Card title="WebSocket Auth" icon="plug" href="/api/websocket-overview">
+    Authenticate WebSocket connections
+  </Card>
+</CardGroup>

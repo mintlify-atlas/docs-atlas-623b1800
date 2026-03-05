@@ -1,0 +1,422 @@
+---
+title: 'Surgery Endpoints'
+description: 'Access surgical trajectory data and submit AI analysis results'
+---
+
+## GET /api/v1/surgeries/{id}/trajectory
+
+Retrieve the complete trajectory data for a specific surgery session, including all recorded movements, timestamps, and any existing AI analysis.
+
+### Authentication
+
+<Note>
+Requires JWT authentication with **ROLE_SURGEON** or **ROLE_AI**. Surgeons can only access their own surgeries, while AI systems can access all trajectories.
+</Note>
+
+### Path Parameters
+
+<ParamField path="id" type="UUID" required>
+  Unique identifier of the surgery session
+  
+  Example: `550e8400-e29b-41d4-a716-446655440000`
+</ParamField>
+
+### Authorization Rules
+
+- **Surgeons (ROLE_SURGEON)**: Can only retrieve their own surgery trajectories
+- **AI Systems (ROLE_AI)**: Can retrieve any surgery trajectory
+
+### Response
+
+<ResponseField name="surgeryId" type="UUID">
+  Unique identifier of the surgery session
+</ResponseField>
+
+<ResponseField name="startTime" type="LocalDateTime">
+  Timestamp when the surgery started (ISO 8601 format)
+</ResponseField>
+
+<ResponseField name="endTime" type="LocalDateTime">
+  Timestamp when the surgery finished (ISO 8601 format)
+</ResponseField>
+
+<ResponseField name="movements" type="Movement[]">
+  Array of recorded movements during the surgery
+  
+  Each movement contains:
+  - `coordinates`: double[] - 3D coordinates [x, y, z]
+  - `event`: SurgeryEvent - Event type (NONE, TUMOR_TOUCH, HEMORRHAGE, START, FINISH)
+  - `timestamp`: long - Unix timestamp in milliseconds
+</ResponseField>
+
+<ResponseField name="score" type="Double" nullable>
+  AI-generated performance score (0-100)
+  
+  `null` if analysis hasn't been completed yet
+</ResponseField>
+
+<ResponseField name="feedback" type="String" nullable>
+  AI-generated textual feedback and recommendations
+  
+  `null` if analysis hasn't been completed yet
+</ResponseField>
+
+### Code Examples
+
+<CodeGroup>
+
+```bash cURL
+curl -X GET http://localhost:8080/api/v1/surgeries/550e8400-e29b-41d4-a716-446655440000/trajectory \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+```
+
+```javascript JavaScript/TypeScript
+const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...';
+const surgeryId = '550e8400-e29b-41d4-a716-446655440000';
+
+const response = await fetch(
+  `http://localhost:8080/api/v1/surgeries/${surgeryId}/trajectory`,
+  {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  }
+);
+
+const trajectory = await response.json();
+console.log(`Surgery score: ${trajectory.score}`);
+console.log(`Total movements: ${trajectory.movements.length}`);
+```
+
+```python Python
+import requests
+
+token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+surgery_id = '550e8400-e29b-41d4-a716-446655440000'
+
+headers = {'Authorization': f'Bearer {token}'}
+
+response = requests.get(
+    f'http://localhost:8080/api/v1/surgeries/{surgery_id}/trajectory',
+    headers=headers
+)
+
+trajectory = response.json()
+print(f"Score: {trajectory['score']}")
+print(f"Movements: {len(trajectory['movements'])}")
+```
+
+```java Java
+import java.net.http.*;
+import java.net.URI;
+
+String token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...";
+String surgeryId = "550e8400-e29b-41d4-a716-446655440000";
+
+HttpClient client = HttpClient.newHttpClient();
+HttpRequest request = HttpRequest.newBuilder()
+    .uri(URI.create("http://localhost:8080/api/v1/surgeries/" + surgeryId + "/trajectory"))
+    .header("Authorization", "Bearer " + token)
+    .GET()
+    .build();
+
+HttpResponse<String> response = client.send(request,
+    HttpResponse.BodyHandlers.ofString());
+```
+
+</CodeGroup>
+
+### Response Examples
+
+```json 200 OK - With AI Analysis
+{
+  "surgeryId": "550e8400-e29b-41d4-a716-446655440000",
+  "startTime": "2024-03-05T10:30:00",
+  "endTime": "2024-03-05T10:45:30",
+  "movements": [
+    {
+      "coordinates": [10.5, 20.3, 15.7],
+      "event": "START",
+      "timestamp": 1709636400000
+    },
+    {
+      "coordinates": [10.8, 20.5, 15.9],
+      "event": "NONE",
+      "timestamp": 1709636401000
+    },
+    {
+      "coordinates": [11.2, 21.0, 16.2],
+      "event": "TUMOR_TOUCH",
+      "timestamp": 1709636402500
+    },
+    {
+      "coordinates": [11.5, 21.3, 16.5],
+      "event": "FINISH",
+      "timestamp": 1709637330000
+    }
+  ],
+  "score": 87.5,
+  "feedback": "Excellent precision during tumor removal. Movement trajectory was smooth with minimal tremor. Consider reducing speed during critical approach phases."
+}
+```
+
+```json 200 OK - Without AI Analysis
+{
+  "surgeryId": "650e8400-e29b-41d4-a716-446655440001",
+  "startTime": "2024-03-05T14:15:00",
+  "endTime": "2024-03-05T14:28:45",
+  "movements": [
+    {
+      "coordinates": [5.2, 8.7, 12.3],
+      "event": "START",
+      "timestamp": 1709650500000
+    },
+    {
+      "coordinates": [5.5, 9.0, 12.6],
+      "event": "FINISH",
+      "timestamp": 1709651325000
+    }
+  ],
+  "score": null,
+  "feedback": null
+}
+```
+
+```json 403 Forbidden
+{
+  "timestamp": "2024-03-05T10:30:00",
+  "status": 403,
+  "error": "Forbidden",
+  "message": "Access denied: You can only access your own surgeries",
+  "path": "/api/v1/surgeries/550e8400-e29b-41d4-a716-446655440000/trajectory"
+}
+```
+
+```json 404 Not Found
+{
+  "timestamp": "2024-03-05T10:30:00",
+  "status": 404,
+  "error": "Not Found",
+  "message": "Surgery not found with ID: 550e8400-e29b-41d4-a716-446655440000",
+  "path": "/api/v1/surgeries/550e8400-e29b-41d4-a716-446655440000/trajectory"
+}
+```
+
+### Surgery Event Types
+
+The `event` field in each movement can have the following values:
+
+| Event | Description |
+|-------|-------------|
+| `START` | Beginning of the surgery session |
+| `NONE` | Normal movement without special event |
+| `TUMOR_TOUCH` | Surgical instrument made contact with tumor |
+| `HEMORRHAGE` | Hemorrhage event detected |
+| `FINISH` | End of the surgery session |
+
+---
+
+## POST /api/v1/surgeries/{id}/analysis
+
+Submit AI-generated analysis results for a completed surgery. This endpoint is exclusively for AI systems to provide automated scoring and feedback.
+
+### Authentication
+
+<Warning>
+This endpoint requires **ROLE_AI** authentication. Surgeon accounts will receive `403 Forbidden` errors.
+</Warning>
+
+### Path Parameters
+
+<ParamField path="id" type="UUID" required>
+  Unique identifier of the surgery session to analyze
+  
+  Example: `550e8400-e29b-41d4-a716-446655440000`
+</ParamField>
+
+### Request Body
+
+<ParamField body="score" type="double" required>
+  Performance score for the surgery
+  - Minimum: 0
+  - Maximum: 100
+  - Represents overall surgical performance quality
+</ParamField>
+
+<ParamField body="feedback" type="string" required>
+  Detailed textual feedback and recommendations
+  - Cannot be blank
+  - Should include:
+    - Performance highlights
+    - Areas for improvement
+    - Specific technique recommendations
+    - Safety observations
+</ParamField>
+
+### Response
+
+Returns `204 No Content` on success with an empty response body.
+
+### Code Examples
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST http://localhost:8080/api/v1/surgeries/550e8400-e29b-41d4-a716-446655440000/analysis \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "score": 87.5,
+    "feedback": "Excellent precision during tumor removal. Movement trajectory was smooth with minimal tremor. Consider reducing speed during critical approach phases."
+  }'
+```
+
+```javascript JavaScript/TypeScript
+const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...';
+const surgeryId = '550e8400-e29b-41d4-a716-446655440000';
+
+const analysis = {
+  score: 87.5,
+  feedback: 'Excellent precision during tumor removal. Movement trajectory was smooth with minimal tremor. Consider reducing speed during critical approach phases.'
+};
+
+const response = await fetch(
+  `http://localhost:8080/api/v1/surgeries/${surgeryId}/analysis`,
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(analysis)
+  }
+);
+
+if (response.status === 204) {
+  console.log('Analysis submitted successfully');
+}
+```
+
+```python Python
+import requests
+
+token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+surgery_id = '550e8400-e29b-41d4-a716-446655440000'
+
+headers = {
+    'Authorization': f'Bearer {token}',
+    'Content-Type': 'application/json'
+}
+
+analysis = {
+    'score': 87.5,
+    'feedback': 'Excellent precision during tumor removal. Movement trajectory was smooth with minimal tremor. Consider reducing speed during critical approach phases.'
+}
+
+response = requests.post(
+    f'http://localhost:8080/api/v1/surgeries/{surgery_id}/analysis',
+    headers=headers,
+    json=analysis
+)
+
+if response.status_code == 204:
+    print('Analysis submitted successfully')
+```
+
+```java Java
+import java.net.http.*;
+import java.net.URI;
+
+String token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...";
+String surgeryId = "550e8400-e29b-41d4-a716-446655440000";
+
+String requestBody = """{
+  "score": 87.5,
+  "feedback": "Excellent precision during tumor removal. Movement trajectory was smooth with minimal tremor. Consider reducing speed during critical approach phases."
+}""";
+
+HttpClient client = HttpClient.newHttpClient();
+HttpRequest request = HttpRequest.newBuilder()
+    .uri(URI.create("http://localhost:8080/api/v1/surgeries/" + surgeryId + "/analysis"))
+    .header("Authorization", "Bearer " + token)
+    .header("Content-Type", "application/json")
+    .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+    .build();
+
+HttpResponse<Void> response = client.send(request,
+    HttpResponse.BodyHandlers.discarding());
+```
+
+</CodeGroup>
+
+### Response Examples
+
+```text 204 No Content
+(Empty response body)
+```
+
+```json 400 Bad Request - Validation Error
+{
+  "timestamp": "2024-03-05T10:30:00",
+  "status": 400,
+  "error": "Bad Request",
+  "message": "El score no puede ser mayor a 100",
+  "path": "/api/v1/surgeries/550e8400-e29b-41d4-a716-446655440000/analysis"
+}
+```
+
+```json 403 Forbidden - Surgeon Account
+{
+  "timestamp": "2024-03-05T10:30:00",
+  "status": 403,
+  "error": "Forbidden",
+  "message": "Access denied: Only AI systems can submit analysis",
+  "path": "/api/v1/surgeries/550e8400-e29b-41d4-a716-446655440000/analysis"
+}
+```
+
+```json 404 Not Found
+{
+  "timestamp": "2024-03-05T10:30:00",
+  "status": 404,
+  "error": "Not Found",
+  "message": "Surgery not found with ID: 550e8400-e29b-41d4-a716-446655440000",
+  "path": "/api/v1/surgeries/550e8400-e29b-41d4-a716-446655440000/analysis"
+}
+```
+
+## Workflow Example
+
+Typical AI analysis workflow:
+
+<Steps>
+  <Step title="Surgery Completion">
+    Surgeon completes a simulation, triggering a `FINISH` event via WebSocket
+  </Step>
+  <Step title="AI Notification">
+    AI system receives `NEW_SURGERY` notification on `/ws/ai` channel with surgery ID
+  </Step>
+  <Step title="Fetch Trajectory">
+    AI calls `GET /surgeries/{id}/trajectory` to retrieve movement data
+  </Step>
+  <Step title="Analyze Data">
+    AI processes trajectory, calculates metrics, and generates feedback
+  </Step>
+  <Step title="Submit Analysis">
+    AI calls `POST /surgeries/{id}/analysis` with score and feedback
+  </Step>
+  <Step title="Surgeon Access">
+    Surgeon can now view AI feedback by fetching the trajectory again
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="WebSocket Overview" icon="signal-stream" href="/api/websocket-overview">
+    Learn about real-time telemetry streaming
+  </Card>
+  <Card title="AI Channel" icon="robot" href="/api/ai-channel">
+    Receive surgery completion notifications
+  </Card>
+</CardGroup>

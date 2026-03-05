@@ -1,0 +1,411 @@
+---
+title: Backend Deployment
+description: Deploy the Justina Spring Boot backend manually
+---
+
+This guide covers manual deployment of the Justina backend without Docker. The backend is built with Spring Boot 4.0.2 and Java 21.
+
+## Prerequisites
+
+Ensure you have the following installed:
+
+- Java Development Kit (JDK) 21+
+- Maven 3.9+ (optional, can use included wrapper)
+- PostgreSQL 15+ (for production)
+
+<Note>
+  See the [Prerequisites](/deployment/prerequisites) page for detailed installation instructions.
+</Note>
+
+## Clone Repository
+
+<Steps>
+  <Step title="Clone the Source Code">
+    ```bash
+    git clone <repository-url>
+    cd S02-26-Equipo-24-Web-App-Development/backend
+    ```
+  </Step>
+
+  <Step title="Verify Project Structure">
+    ```bash
+    ls -la
+    ```
+    
+    You should see:
+    - `pom.xml` - Maven configuration
+    - `mvnw` - Maven wrapper
+    - `src/` - Source code directory
+    - `Dockerfile` - Docker configuration (not needed for manual deployment)
+  </Step>
+</Steps>
+
+## Configure Environment
+
+### Set Required Environment Variables
+
+The backend requires specific environment variables to run. See the [Environment Variables](/deployment/environment-variables) page for complete documentation.
+
+<CodeGroup>
+```bash Development (H2 Database)
+# Required
+export JWT_SECRET_KEY="dev-secret-key-change-in-production"
+export PORT=8080
+
+# H2 Database (default)
+export SPRING_DATASOURCE_URL="jdbc:h2:mem:justina"
+export SPRING_DATASOURCE_USERNAME="sa"
+export SPRING_DATASOURCE_PASSWORD=""
+export SPRING_DATASOURCE_DRIVER_CLASS_NAME="org.h2.Driver"
+export SPRING_JPA_HIBERNATE_DDL_AUTO="create-drop"
+export SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT="org.hibernate.dialect.H2Dialect"
+```
+
+```bash Production (PostgreSQL)
+# Required
+export JWT_SECRET_KEY="your-secure-random-secret-key"
+export PORT=8080
+
+# PostgreSQL Database
+export SPRING_DATASOURCE_URL="jdbc:postgresql://localhost:5432/justina"
+export SPRING_DATASOURCE_USERNAME="justina_user"
+export SPRING_DATASOURCE_PASSWORD="your_secure_password"
+export SPRING_DATASOURCE_DRIVER_CLASS_NAME="org.postgresql.Driver"
+export SPRING_JPA_HIBERNATE_DDL_AUTO="update"
+export SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT="org.hibernate.dialect.PostgreSQLDialect"
+export SPRING_JPA_SHOW_SQL="false"
+```
+</CodeGroup>
+
+<Warning>
+  Generate a strong `JWT_SECRET_KEY` for production:
+  ```bash
+  openssl rand -base64 32
+  ```
+</Warning>
+
+### Setup PostgreSQL Database (Production)
+
+<Steps>
+  <Step title="Create Database">
+    ```bash
+    # Connect to PostgreSQL
+    psql -U postgres
+    
+    # Create database
+    CREATE DATABASE justina;
+    
+    # Create user
+    CREATE USER justina_user WITH PASSWORD 'your_secure_password';
+    
+    # Grant privileges
+    GRANT ALL PRIVILEGES ON DATABASE justina TO justina_user;
+    ```
+  </Step>
+
+  <Step title="Verify Connection">
+    ```bash
+    psql -U justina_user -d justina -h localhost
+    ```
+  </Step>
+</Steps>
+
+## Build Application
+
+### Using Maven Wrapper (Recommended)
+
+The project includes a Maven wrapper that doesn't require Maven installation:
+
+<Steps>
+  <Step title="Make Wrapper Executable">
+    ```bash
+    chmod +x mvnw
+    ```
+  </Step>
+
+  <Step title="Clean and Build">
+    ```bash
+    ./mvnw clean install -DskipTests
+    ```
+    
+    This command:
+    - Downloads dependencies
+    - Compiles source code
+    - Runs unit tests (skip with `-DskipTests`)
+    - Creates JAR file in `target/` directory
+    
+    Expected output:
+    ```
+    [INFO] BUILD SUCCESS
+    [INFO] Total time: 45.123 s
+    ```
+  </Step>
+
+  <Step title="Verify JAR Creation">
+    ```bash
+    ls -lh target/*.jar
+    ```
+    
+    You should see:
+    ```
+    Justina-0.0.1-SNAPSHOT.jar
+    ```
+  </Step>
+</Steps>
+
+### Using Installed Maven
+
+If you have Maven installed system-wide:
+
+```bash
+mvn clean install -DskipTests
+```
+
+## Run Application
+
+### Run with Maven (Development)
+
+Run directly with Maven for development:
+
+```bash
+./mvnw spring-boot:run
+```
+
+The application will:
+- Start Spring Boot
+- Initialize H2/PostgreSQL database
+- Create default users (`surgeon_master`, `ia_justina`)
+- Listen on port 8080
+
+### Run JAR File (Production)
+
+Run the compiled JAR for production:
+
+```bash
+java -jar target/Justina-0.0.1-SNAPSHOT.jar
+```
+
+<Note>
+  Ensure environment variables are set before running the JAR.
+</Note>
+
+### Run with Custom Port
+
+```bash
+java -jar target/Justina-0.0.1-SNAPSHOT.jar --server.port=8888
+```
+
+## Verify Deployment
+
+<Steps>
+  <Step title="Check Application Health">
+    ```bash
+    curl http://localhost:8080/swagger-ui/index.html
+    ```
+    
+    You should see the Swagger UI interface.
+  </Step>
+
+  <Step title="Test Authentication Endpoint">
+    ```bash
+    curl -X POST http://localhost:8080/api/v1/auth/login \
+      -H "Content-Type: application/json" \
+      -d '{
+        "username": "surgeon_master",
+        "password": "justina2024"
+      }'
+    ```
+    
+    Expected response:
+    ```json
+    {
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+      "username": "surgeon_master",
+      "role": "ROLE_SURGEON"
+    }
+    ```
+  </Step>
+
+  <Step title="Check WebSocket Endpoint">
+    The WebSocket is available at:
+    ```
+    ws://localhost:8080/ws/simulation
+    ```
+  </Step>
+</Steps>
+
+## Default Users
+
+The backend automatically creates default users on first startup:
+
+| Username | Password | Role |
+|----------|----------|------|
+| `surgeon_master` | `justina2024` | `ROLE_SURGEON` |
+| `ia_justina` | `ia_secret_2024` | `ROLE_IA` |
+
+<Warning>
+  Change these default passwords immediately in production!
+</Warning>
+
+## Access API Documentation
+
+Once running, access the interactive API documentation:
+
+| Tool | URL |
+|------|-----|
+| **Swagger UI** | `http://localhost:8080/swagger-ui/index.html` |
+| **OpenAPI JSON** | `http://localhost:8080/v3/api-docs` |
+| **OpenAPI YAML** | `http://localhost:8080/v3/api-docs.yaml` |
+
+## Running as a Service
+
+### Systemd Service (Linux)
+
+Create `/etc/systemd/system/justina-backend.service`:
+
+```ini
+[Unit]
+Description=Justina Backend Service
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=justina
+WorkingDirectory=/opt/justina/backend
+Environment="JWT_SECRET_KEY=your-secret-key"
+Environment="SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/justina"
+Environment="SPRING_DATASOURCE_USERNAME=justina_user"
+Environment="SPRING_DATASOURCE_PASSWORD=your_password"
+ExecStart=/usr/bin/java -jar /opt/justina/backend/target/Justina-0.0.1-SNAPSHOT.jar
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Manage the service:
+
+```bash
+# Reload systemd
+sudo systemctl daemon-reload
+
+# Enable auto-start
+sudo systemctl enable justina-backend
+
+# Start service
+sudo systemctl start justina-backend
+
+# Check status
+sudo systemctl status justina-backend
+
+# View logs
+sudo journalctl -u justina-backend -f
+```
+
+## Production Optimization
+
+### JVM Options
+
+Optimize JVM for production:
+
+```bash
+java -Xms512m -Xmx2g \
+  -XX:+UseG1GC \
+  -XX:MaxGCPauseMillis=200 \
+  -jar target/Justina-0.0.1-SNAPSHOT.jar
+```
+
+### Application Properties
+
+For production, consider tuning `application.properties` or using profiles:
+
+```bash
+java -jar target/Justina-0.0.1-SNAPSHOT.jar --spring.profiles.active=production
+```
+
+## Troubleshooting
+
+<Accordion title="Port Already in Use">
+  Check what's using port 8080:
+  ```bash
+  lsof -i :8080
+  # or
+  netstat -tulpn | grep 8080
+  ```
+  
+  Kill the process or use a different port:
+  ```bash
+  export PORT=8888
+  ```
+</Accordion>
+
+<Accordion title="Database Connection Failed">
+  Verify PostgreSQL is running:
+  ```bash
+  sudo systemctl status postgresql
+  ```
+  
+  Test connection:
+  ```bash
+  psql -U justina_user -d justina -h localhost
+  ```
+  
+  Check firewall rules:
+  ```bash
+  sudo ufw status
+  ```
+</Accordion>
+
+<Accordion title="JWT Token Errors">
+  Ensure `JWT_SECRET_KEY` is set and is at least 256 bits (32 characters):
+  ```bash
+  echo $JWT_SECRET_KEY | wc -c
+  ```
+</Accordion>
+
+<Accordion title="Build Failures">
+  Clear Maven cache and rebuild:
+  ```bash
+  ./mvnw clean
+  rm -rf ~/.m2/repository/project/Justina
+  ./mvnw install
+  ```
+</Accordion>
+
+## Monitoring and Logs
+
+### View Application Logs
+
+```bash
+# If running in terminal
+./mvnw spring-boot:run
+
+# If running as JAR
+java -jar target/Justina-0.0.1-SNAPSHOT.jar > app.log 2>&1 &
+tail -f app.log
+```
+
+### Enable SQL Logging
+
+```bash
+export SPRING_JPA_SHOW_SQL=true
+```
+
+## Next Steps
+
+After deploying the backend:
+
+1. [Deploy Frontend](/deployment/frontend) - Deploy the Next.js frontend
+2. [Deploy AI Service](/deployment/ai-service) - Deploy the AI analysis service
+3. Configure reverse proxy (Nginx, Apache)
+4. Set up SSL certificates
+5. Configure monitoring and alerting
+6. Set up automated backups
+
+## Additional Resources
+
+- [Environment Variables](/deployment/environment-variables) - Complete variable reference
+- [Docker Deployment](/deployment/docker) - Container-based deployment
+- Backend source: `/backend/README.md`
+- Tech stack: Spring Boot 4.0.2, Java 21, PostgreSQL 15+

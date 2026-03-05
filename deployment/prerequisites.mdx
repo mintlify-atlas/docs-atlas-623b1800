@@ -1,0 +1,180 @@
+---
+title: Prerequisites
+description: System requirements and dependencies needed to deploy Justina
+---
+
+Before deploying Justina, ensure your environment meets the following requirements. The platform consists of three main components: Backend (Spring Boot), Frontend (Next.js), and AI Service (Python).
+
+## Required Software
+
+<Steps>
+  <Step title="Java Development Kit (JDK) 21+">
+    The backend requires Java 21 or higher.
+    
+    ```bash
+    # Verify Java installation
+    java -version
+    ```
+    
+    Expected output:
+    ```
+    openjdk version "21.0.x" or higher
+    ```
+    
+    <Note>
+      Download from [OpenJDK](https://openjdk.org/projects/jdk/21/) or [Eclipse Temurin](https://adoptium.net/)
+    </Note>
+  </Step>
+
+  <Step title="Maven 3.9+">
+    Maven is required for building the backend application.
+    
+    ```bash
+    # Verify Maven installation
+    mvn -version
+    ```
+    
+    Expected output:
+    ```
+    Apache Maven 3.9.x or higher
+    ```
+    
+    <Note>
+      Download from [Apache Maven](https://maven.apache.org/)
+    </Note>
+  </Step>
+
+  <Step title="Node.js 20+">
+    Node.js is required for the Next.js frontend.
+    
+    ```bash
+    # Verify Node.js installation
+    node -v
+    ```
+    
+    Expected output:
+    ```
+    v20.x.x or higher
+    ```
+    
+    <Note>
+      Download from [Node.js](https://nodejs.org/)
+    </Note>
+  </Step>
+
+  <Step title="Python 3.9+">
+    Python is required for the AI analysis service.
+    
+    ```bash
+    # Verify Python installation
+    python --version
+    ```
+    
+    Expected output:
+    ```
+    Python 3.9.x or higher
+    ```
+    
+    <Note>
+      Download from [Python.org](https://www.python.org/downloads/)
+    </Note>
+  </Step>
+
+  <Step title="PostgreSQL 15+ (Production)">
+    PostgreSQL is recommended for production deployments.
+    
+    ```bash
+    # Verify PostgreSQL installation
+    psql --version
+    ```
+    
+    Expected output:
+    ```
+    psql (PostgreSQL) 15.x or higher
+    ```
+    
+    <Note>
+      Download from [PostgreSQL](https://www.postgresql.org/download/). H2 database is used for development and is included with the backend.
+    </Note>
+  </Step>
+</Steps>
+
+## Optional Software
+
+### Docker & Docker Compose
+
+Docker is optional but recommended for simplified deployment and production environments.
+
+```bash
+# Verify Docker installation
+docker --version
+docker-compose --version
+```
+
+<Note>
+  Download from [Docker](https://www.docker.com/get-started)
+</Note>
+
+## System Requirements
+
+### Minimum Requirements
+
+| Component | CPU | RAM | Storage |
+|-----------|-----|-----|----------|
+| Backend | 2 cores | 2 GB | 500 MB |
+| Frontend | 1 core | 512 MB | 200 MB |
+| AI Service | 1 core | 1 GB | 200 MB |
+| PostgreSQL | 1 core | 1 GB | 5 GB |
+
+### Recommended Requirements
+
+| Component | CPU | RAM | Storage |
+|-----------|-----|-----|----------|
+| Backend | 4 cores | 4 GB | 1 GB |
+| Frontend | 2 cores | 1 GB | 500 MB |
+| AI Service | 2 cores | 2 GB | 500 MB |
+| PostgreSQL | 2 cores | 2 GB | 10 GB |
+
+## Network Requirements
+
+<Warning>
+  Ensure the following ports are available:
+</Warning>
+
+| Service | Port | Protocol | Purpose |
+|---------|------|----------|----------|
+| Backend | 8080 | HTTP/WebSocket | REST API & WebSocket connections |
+| Frontend | 3000 | HTTP | Next.js application |
+| PostgreSQL | 5432 | TCP | Database connections |
+| AI Service | 8000 | HTTP | Health checks (optional) |
+
+## Development vs Production
+
+<Accordion title="Development Environment">
+  **Development** deployments can use:
+  - H2 in-memory database (no PostgreSQL required)
+  - Embedded Maven wrapper (no Maven installation needed)
+  - Single machine deployment
+  - HTTP connections
+</Accordion>
+
+<Accordion title="Production Environment">
+  **Production** deployments should use:
+  - PostgreSQL database
+  - Proper secret management
+  - SSL/TLS certificates
+  - Load balancing and reverse proxy
+  - Separate machines for each service
+  - Monitoring and logging solutions
+</Accordion>
+
+## Next Steps
+
+Once your environment meets these prerequisites, proceed to:
+
+1. [Environment Variables](/deployment/environment-variables) - Configure required environment variables
+2. [Docker Deployment](/deployment/docker) - Deploy using Docker (recommended)
+3. Manual deployment:
+   - [Backend Deployment](/deployment/backend)
+   - [Frontend Deployment](/deployment/frontend)
+   - [AI Service Deployment](/deployment/ai-service)

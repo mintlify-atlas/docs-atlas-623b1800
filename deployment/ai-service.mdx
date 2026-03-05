@@ -1,0 +1,589 @@
+---
+title: AI Service Deployment
+description: Deploy the Justina Python AI analysis service
+---
+
+This guide covers deploying the AI service, which analyzes surgical trajectories and provides real-time feedback through WebSocket connections.
+
+## Prerequisites
+
+Ensure you have:
+
+- Python 3.9+ installed
+- pip package manager
+- Backend API running and accessible
+
+<Note>
+  See the [Prerequisites](/deployment/prerequisites) page for Python installation.
+</Note>
+
+## Clone Repository
+
+```bash
+git clone <repository-url>
+cd S02-26-Equipo-24-Web-App-Development/ia
+```
+
+## Python Environment Setup
+
+<Steps>
+  <Step title="Create Virtual Environment">
+    ```bash
+    # Create virtual environment
+    python -m venv venv
+    ```
+  </Step>
+
+  <Step title="Activate Virtual Environment">
+    <CodeGroup>
+    ```bash Linux/macOS
+    source venv/bin/activate
+    ```
+    
+    ```powershell Windows
+    .\venv\Scripts\activate
+    ```
+    </CodeGroup>
+    
+    Your terminal prompt should show `(venv)` prefix.
+  </Step>
+
+  <Step title="Upgrade pip">
+    ```bash
+    pip install --upgrade pip
+    ```
+  </Step>
+</Steps>
+
+## Install Dependencies
+
+The AI service requires the following packages:
+
+```txt requirements.txt
+requests
+pandas
+numpy
+python-dotenv
+websocket-client
+flask
+```
+
+Install all dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+### Verify Installation
+
+```bash
+pip list
+```
+
+Expected packages:
+- `requests` - HTTP client for API calls
+- `pandas` - Data manipulation
+- `numpy` - Numerical computing
+- `python-dotenv` - Environment variable management
+- `websocket-client` - WebSocket connectivity
+- `flask` - Health check server
+
+## Configure Environment
+
+### Create Environment File
+
+Create `.env` in the `ia/` directory:
+
+```bash .env
+BACKEND_URL=http://localhost:8080
+IA_USERNAME=ia_justina
+IA_PASSWORD=ia_secret_2024
+REQUEST_TIMEOUT=10
+RETRY_ATTEMPTS=3
+```
+
+### Environment Variables
+
+The AI service reads configuration from `config.py`:
+
+```python config.py
+import os
+
+# Backend URL
+BASE_URL = os.getenv("BACKEND_URL", "http://localhost:8080")
+
+# AI credentials
+IA_USERNAME = os.getenv("IA_USERNAME", "ia_justina")
+IA_PASSWORD = os.getenv("IA_PASSWORD", "ia_secret_2024")
+
+# Request settings
+REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "10"))
+RETRY_ATTEMPTS = int(os.getenv("RETRY_ATTEMPTS", "3"))
+```
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `BACKEND_URL` | Backend API base URL | `http://localhost:8080` | Yes |
+| `IA_USERNAME` | AI service username | `ia_justina` | Yes |
+| `IA_PASSWORD` | AI service password | `ia_secret_2024` | Yes |
+| `REQUEST_TIMEOUT` | HTTP timeout (seconds) | `10` | No |
+| `RETRY_ATTEMPTS` | Retry count | `3` | No |
+| `PORT` | Health check server port | `8000` | No |
+
+<Warning>
+  Change `IA_PASSWORD` from the default value in production!
+</Warning>
+
+## Running the AI Service
+
+The AI service offers two operational modes:
+
+### Mode 1: Manual Processing (main.py)
+
+Interactive CLI for manual surgery analysis:
+
+```bash
+python main.py
+```
+
+Features:
+- Process individual surgeries by ID
+- Batch processing
+- Interactive menu
+
+Example session:
+```
+╔════════════════════════════════════════╗
+║   JUSTINA - SISTEMA DE IA AVANZADO    ║
+╚════════════════════════════════════════╝
+
+Opciones:
+1. Procesar una cirugía (ID)
+2. Procesar lote de ejemplo
+3. Salir
+
+Seleccione una opción: 1
+Ingrese el UUID de la cirugía: 550e8400-e29b-41d4-a716-446655440000
+```
+
+### Mode 2: WebSocket Client (websocket_client.py)
+
+Automated real-time processing via WebSocket:
+
+```bash
+python websocket_client.py
+```
+
+Features:
+- Listens for backend notifications
+- Automatically processes new surgeries
+- Maintains persistent connection
+- Includes Flask health check server
+
+Expected output:
+```
+╔════════════════════════════════════════════════════════╗
+║   JUSTINA - CLIENTE IA CON WEBSOCKET                  ║
+║   Escuchando notificaciones en tiempo real...         ║
+╚════════════════════════════════════════════════════════╝
+
+🚀 Iniciando cliente de IA...
+📡 Backend: http://localhost:8080
+🔌 WebSocket conectado exitosamente
+👂 Esperando notificaciones del backend...
+```
+
+<Note>
+  The WebSocket client is recommended for production deployments.
+</Note>
+
+## AI Analysis Pipeline
+
+The AI service runs a 5-step analysis pipeline defined in `analysis_pipeline.py`:
+
+1. **Trajectory Validation** - Verify data quality
+2. **Movement Analysis** - Calculate metrics (speed, smoothness)
+3. **Pattern Recognition** - Identify surgical patterns
+4. **Error Detection** - Find anomalies
+5. **Score Generation** - Calculate final score (0-100)
+
+The pipeline processes trajectory data and returns:
+- `score` (float): Performance score 0-100
+- `feedback` (list): Array of feedback messages
+
+## Process Flow
+
+<Steps>
+  <Step title="Authentication">
+    AI service authenticates with backend:
+    
+    ```python
+    POST /api/v1/auth/login
+    {
+      "username": "ia_justina",
+      "password": "ia_secret_2024"
+    }
+    ```
+    
+    Receives JWT token for subsequent requests.
+  </Step>
+
+  <Step title="WebSocket Connection">
+    Connects to WebSocket endpoint:
+    
+    ```
+    ws://backend-url/ws/ai?token=<jwt-token>
+    ```
+    
+    Listens for `NEW_SURGERY` events.
+  </Step>
+
+  <Step title="Receive Notification">
+    Backend sends notification:
+    
+    ```json
+    {
+      "event": "NEW_SURGERY",
+      "surgeryId": "550e8400-e29b-41d4-a716-446655440000"
+    }
+    ```
+  </Step>
+
+  <Step title="Fetch Trajectory">
+    Retrieves surgery data:
+    
+    ```python
+    GET /api/v1/surgeries/{surgeryId}/trajectory
+    ```
+    
+    Returns movement coordinates and timestamps.
+  </Step>
+
+  <Step title="Analyze Data">
+    Runs analysis pipeline on trajectory data:
+    
+    ```python
+    score, feedback = run_pipeline(trajectory_data)
+    ```
+  </Step>
+
+  <Step title="Send Results">
+    Posts analysis back to backend:
+    
+    ```python
+    POST /api/v1/surgeries/{surgeryId}/analysis
+    {
+      "score": 87.5,
+      "feedback": [
+        "Excelente precisión en el movimiento inicial",
+        "Se detectaron 2 movimientos bruscos",
+        "Tiempo total: 145 segundos"
+      ]
+    }
+    ```
+  </Step>
+</Steps>
+
+## Production Deployment
+
+### Systemd Service (Linux)
+
+Create `/etc/systemd/system/justina-ai.service`:
+
+```ini
+[Unit]
+Description=Justina AI Service
+After=network.target
+
+[Service]
+Type=simple
+User=justina
+WorkingDirectory=/opt/justina/ia
+Environment="BACKEND_URL=http://localhost:8080"
+Environment="IA_USERNAME=ia_justina"
+Environment="IA_PASSWORD=your-secure-password"
+ExecStart=/opt/justina/ia/venv/bin/python websocket_client.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Manage service:
+
+```bash
+# Reload systemd
+sudo systemctl daemon-reload
+
+# Enable auto-start
+sudo systemctl enable justina-ai
+
+# Start service
+sudo systemctl start justina-ai
+
+# Check status
+sudo systemctl status justina-ai
+
+# View logs
+sudo journalctl -u justina-ai -f
+```
+
+### Docker Deployment
+
+Create `Dockerfile` in `ia/` directory:
+
+```dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+EXPOSE 8000
+
+CMD ["python", "websocket_client.py"]
+```
+
+Build and run:
+
+```bash
+# Build image
+docker build -t justina-ai .
+
+# Run container
+docker run -d \
+  --name justina-ai \
+  -e BACKEND_URL=http://backend:8080 \
+  -e IA_USERNAME=ia_justina \
+  -e IA_PASSWORD=your-password \
+  justina-ai
+```
+
+### Supervisor (Alternative)
+
+Create `/etc/supervisor/conf.d/justina-ai.conf`:
+
+```ini
+[program:justina-ai]
+command=/opt/justina/ia/venv/bin/python websocket_client.py
+directory=/opt/justina/ia
+environment=BACKEND_URL="http://localhost:8080",IA_USERNAME="ia_justina",IA_PASSWORD="your-password"
+autostart=true
+autorestart=true
+stderr_logfile=/var/log/justina-ai.err.log
+stdout_logfile=/var/log/justina-ai.out.log
+```
+
+Manage:
+
+```bash
+sudo supervisorctl reread
+sudo supervisorctl update
+sudo supervisorctl start justina-ai
+sudo supervisorctl status justina-ai
+```
+
+## Health Check Server
+
+The WebSocket client includes a Flask health check server (useful for cloud platforms like Render):
+
+```python
+from flask import Flask
+
+app = Flask(__name__)
+
+@app.route('/')
+def health_check():
+    return "Justina AI WebSocket Client is Alive!", 200
+
+app.run(host='0.0.0.0', port=8000)
+```
+
+The health endpoint runs on port 8000 by default.
+
+## Monitoring and Logs
+
+### View Logs
+
+```bash
+# If running directly
+python websocket_client.py
+
+# If using systemd
+sudo journalctl -u justina-ai -f
+
+# If using supervisor
+tail -f /var/log/justina-ai.out.log
+```
+
+### Log Output Example
+
+```
+📡 MENSAJE RAW DEL SERVIDOR WEBSOCKET:
+{"event":"NEW_SURGERY","surgeryId":"550e8400-e29b-41d4-a716-446655440000"}
+
+🔔 Nueva cirugía detectada: 550e8400-e29b-41d4-a716-446655440000
+
+🏥 INICIANDO ANÁLISIS: 550e8400-e29b-41d4-a716-446655440000
+📊 Paso 1: Obteniendo trayectoria...
+🧠 Paso 2: Analizando con pipeline de 5 pasos...
+✅ Análisis completado - Score: 87.5/100
+📤 Paso 3: Enviando análisis al backend...
+🎉 ¡Cirugía 550e8400-e29b-41d4-a716-446655440000 procesada exitosamente!
+```
+
+## Troubleshooting
+
+<Accordion title="Cannot Connect to Backend">
+  Verify backend URL:
+  ```bash
+  echo $BACKEND_URL
+  curl $BACKEND_URL/swagger-ui/index.html
+  ```
+  
+  Check network connectivity and firewall rules.
+</Accordion>
+
+<Accordion title="Authentication Failed">
+  Verify credentials match backend defaults:
+  ```bash
+  echo $IA_USERNAME
+  echo $IA_PASSWORD
+  ```
+  
+  Check backend logs for authentication errors.
+</Accordion>
+
+<Accordion title="WebSocket Connection Drops">
+  The client automatically reconnects. Check logs for connection errors:
+  ```bash
+  grep "Error WebSocket" justina-ai.log
+  ```
+  
+  Verify JWT token is valid and not expired.
+</Accordion>
+
+<Accordion title="Module Import Errors">
+  Ensure virtual environment is activated:
+  ```bash
+  which python
+  # Should show: /path/to/venv/bin/python
+  ```
+  
+  Reinstall dependencies:
+  ```bash
+  pip install -r requirements.txt
+  ```
+</Accordion>
+
+<Accordion title="Analysis Pipeline Errors">
+  Check trajectory data format:
+  ```python
+  # Expected format:
+  {
+    "movements": [
+      {"x": 10.5, "y": 20.3, "z": 15.7, "timestamp": "2024-01-15T10:30:00"},
+      ...
+    ]
+  }
+  ```
+  
+  Verify numpy and pandas are installed correctly.
+</Accordion>
+
+## Performance Tuning
+
+### Concurrent Processing
+
+The WebSocket client processes surgeries in separate threads:
+
+```python
+thread = threading.Thread(
+    target=self.procesar_cirugia_async,
+    args=(surgery_id,)
+)
+thread.daemon = True
+thread.start()
+```
+
+### Timeout Configuration
+
+Adjust timeouts for slow networks:
+
+```bash
+export REQUEST_TIMEOUT=30
+export RETRY_ATTEMPTS=5
+```
+
+### Memory Management
+
+For processing large trajectory datasets, consider:
+- Batch processing in chunks
+- Using generators for data iteration
+- Clearing processed data from memory
+
+## Testing the AI Service
+
+### Manual Test
+
+```bash
+# Start backend first
+cd backend && ./mvnw spring-boot:run
+
+# Start AI service
+cd ia
+source venv/bin/activate
+python websocket_client.py
+
+# Trigger a surgery in frontend or via API
+# Watch AI service logs for processing
+```
+
+### API Test
+
+Test individual components:
+
+```python
+# Test authentication
+from client import JustinaAIClient
+
+client = JustinaAIClient()
+if client.ensure_authenticated():
+    print("✅ Authentication successful")
+
+# Test trajectory fetch
+trajectory = client.get_trajectory("surgery-id-here")
+print(trajectory)
+
+# Test analysis
+from analysis_pipeline import run_pipeline
+score, feedback = run_pipeline(trajectory)
+print(f"Score: {score}, Feedback: {feedback}")
+```
+
+## Next Steps
+
+After deploying the AI service:
+
+1. Monitor logs for errors
+2. Set up alerting for service downtime
+3. Configure log rotation
+4. Set up metrics collection
+5. Implement analysis pipeline improvements
+6. Add custom analysis algorithms
+
+## Additional Resources
+
+- [Environment Variables](/deployment/environment-variables) - Configuration reference
+- [Backend Deployment](/deployment/backend) - Deploy backend first
+- [Docker Deployment](/deployment/docker) - Container-based deployment
+- AI service files:
+  - `main.py` - Manual processing
+  - `websocket_client.py` - Real-time WebSocket client
+  - `analysis_pipeline.py` - AI analysis logic
+  - `client.py` - Backend API client
+  - `config.py` - Configuration management

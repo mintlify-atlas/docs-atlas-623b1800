@@ -1,0 +1,264 @@
+---
+title: "3D Surgical Simulation"
+description: "Immersive surgical training powered by Babylon.js 3D rendering engine"
+---
+
+## Overview
+
+Justina's surgical simulation feature provides a realistic 3D environment for practicing surgical procedures. Built with Babylon.js, the simulator offers real-time 3D rendering, physics-based interactions, and intuitive surgical tool controls.
+
+<Note>
+  The simulation runs entirely in the browser using WebGL, requiring no additional plugins or downloads.
+</Note>
+
+## Technical Architecture
+
+The simulation engine is built on **Babylon.js**, a powerful WebGL-based 3D framework that enables:
+
+- Real-time 3D rendering with lighting and materials
+- Physics-based collision detection
+- Camera controls for multiple viewing angles
+- Advanced texture and shader support
+
+### Core Components
+
+<CardGroup cols={2}>
+  <Card title="3D Scene" icon="cube">
+    Babylon.js Scene with custom lighting, camera positioning, and organ models
+  </Card>
+  <Card title="Surgical Tools" icon="scalpel">
+    Interactive instruments with collision detection and event tracking
+  </Card>
+  <Card title="UI Overlay" icon="display">
+    Real-time coordinate display and simulation controls using Babylon.js GUI
+  </Card>
+  <Card title="Event System" icon="bolt">
+    Captures surgical events like tumor touches and hemorrhages
+  </Card>
+</CardGroup>
+
+## 3D Rendering Pipeline
+
+The simulation initializes with the following setup:
+
+```typescript
+const engine = new BABYLON.Engine(canvasRef.current, true);
+const scene = new BABYLON.Scene(engine);
+scene.clearColor = new BABYLON.Color4(0.8, 0.9, 1, 1);
+
+// Laparoscopic camera setup
+const camera = new BABYLON.ArcRotateCamera(
+  "camera",
+  -Math.PI / 2,
+  Math.PI / 2.5,
+  10,
+  BABYLON.Vector3.Zero(),
+  scene
+);
+
+camera.lowerRadiusLimit = 6;
+camera.upperRadiusLimit = 20;
+camera.attachControl(canvasRef.current, true);
+
+// Surgical lighting
+new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
+```
+
+<Tip>
+  The camera limits simulate the restricted movement range of laparoscopic surgery, providing realistic training conditions.
+</Tip>
+
+## Surgical Tools & Controls
+
+### Scalpel Instrument
+
+The primary surgical tool is a 3D scalpel model that follows the user's cursor in 3D space:
+
+```typescript
+scene.onPointerMove = () => {
+  if (!scalpelMesh) return;
+
+  const ray = scene.createPickingRay(
+    scene.pointerX,
+    scene.pointerY,
+    BABYLON.Matrix.Identity(),
+    camera
+  );
+
+  const newPosition = ray.origin.add(ray.direction.scale(depth));
+  const offset = new BABYLON.Vector3(0.1, -0.2, 0);
+  scalpelMesh.position = newPosition.add(offset);
+
+  cutter.position = scalpelMesh.position.clone();
+  checkCollisions();
+};
+```
+
+### User Controls
+
+<Accordion title="Mouse Controls">
+  - **Move**: Position the scalpel in 3D space
+  - **Click & Drag**: Activate cutting mode
+  - **Scroll Wheel**: Adjust depth (distance from camera)
+  - **Right-Click Drag**: Rotate camera view
+</Accordion>
+
+<Accordion title="Depth Control">
+  ```typescript
+  if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERWHEEL) {
+    const wheelEvent = pointerInfo.event as WheelEvent;
+    depth += wheelEvent.deltaY * 0.01;
+  }
+  ```
+  Allows precise control of instrument depth along the viewing axis.
+</Accordion>
+
+## Surgical Environment
+
+### Organ Models
+
+The simulation loads 3D organ models using GLTF/GLB format:
+
+```typescript
+Promise.all([
+  BABYLON.SceneLoader.ImportMeshAsync("", "/models/", "kidney.glb", scene),
+  BABYLON.SceneLoader.ImportMeshAsync("", "/models/", "scalpel.glb", scene)
+]).then(([kidneyResult, scalpelResult]) => {
+  // Configure kidney positioning and scale
+  const kidney = kidneyResult.meshes[0];
+  kidney.scaling = new BABYLON.Vector3(0.5, 0.5, 0.5);
+
+  // Center the organ in the viewport
+  const boundingInfo = kidney.getHierarchyBoundingVectors();
+  const center = boundingInfo.min.add(boundingInfo.max).scale(0.5);
+  kidney.position = kidney.position.subtract(center);
+});
+```
+
+### Tumor Representation
+
+Tumors are rendered as clusters of spherical fragments:
+
+```typescript
+const tumorMaterial = new BABYLON.StandardMaterial("tumorMat", scene);
+tumorMaterial.diffuseColor = new BABYLON.Color3(0.8, 0, 0.2);
+
+const fragmentCount = 25;
+const radius = 0.6;
+
+for (let i = 0; i < fragmentCount; i++) {
+  const fragment = BABYLON.MeshBuilder.CreateSphere(
+    "tumorFragment",
+    { diameter: 0.4, segments: 8 },
+    scene
+  );
+
+  const randomOffset = new BABYLON.Vector3(
+    (Math.random() - 0.5) * radius,
+    (Math.random() - 0.5) * radius,
+    (Math.random() - 0.5) * radius
+  );
+
+  fragment.position = new BABYLON.Vector3(1.2, 0.2, -0.7).add(randomOffset);
+  fragment.material = tumorMaterial;
+  tumorFragments.push(fragment);
+}
+```
+
+## Collision Detection
+
+The simulation uses mesh intersection to detect surgical events:
+
+```typescript
+function checkCollisions() {
+  if (!simulationStarted || !sceneReady || !instrumentActive) return;
+
+  // Hemorrhage detection
+  if (!arteryCut && cutter.intersectsMesh(arteryMesh, true)) {
+    arteryCut = true;
+    const mat = new BABYLON.StandardMaterial("cut", scene);
+    mat.diffuseColor = BABYLON.Color3.Red();
+    arteryMesh.material = mat;
+    enviarEvento(scalpelMesh.position.x, scalpelMesh.position.y, scalpelMesh.position.z, "HEMORRHAGE");
+  }
+
+  // Tumor removal detection
+  tumorFragments.forEach((fragment, index) => {
+    if (cutter.intersectsMesh(fragment, true)) {
+      fragment.dispose();
+      tumorFragments.splice(index, 1);
+      enviarEvento(scalpelMesh.position.x, scalpelMesh.position.y, scalpelMesh.position.z, "TUMOR_TOUCH");
+    }
+  });
+}
+```
+
+<Note>
+  All collision events are immediately transmitted via WebSocket for real-time telemetry analysis.
+</Note>
+
+## Real-Time Coordinate Display
+
+The UI overlay shows live instrument coordinates:
+
+```typescript
+const textX = new GUI.TextBlock();
+textX.text = `Coordenada X: ${scalpelMesh.position.x.toFixed(2)}`;
+
+const textY = new GUI.TextBlock();
+textY.text = `Coordenada Y: ${scalpelMesh.position.y.toFixed(2)}`;
+
+const textZ = new GUI.TextBlock();
+textZ.text = `Coordenada Z: ${scalpelMesh.position.z.toFixed(2)}`;
+```
+
+This provides surgeons with precise spatial awareness during the procedure.
+
+## Performance Optimization
+
+<CardGroup cols={2}>
+  <Card title="Render Loop" icon="rotate">
+    Babylon.js uses requestAnimationFrame for smooth 60 FPS rendering
+  </Card>
+  <Card title="Model Optimization" icon="compress">
+    GLB models are optimized for web delivery with texture compression
+  </Card>
+  <Card title="Collision Efficiency" icon="gauge">
+    Checks only run when instrument is active to minimize CPU usage
+  </Card>
+  <Card title="Memory Management" icon="memory">
+    Meshes are properly disposed when removed to prevent memory leaks
+  </Card>
+</CardGroup>
+
+## Simulation Workflow
+
+1. **Initialization**: Load 3D models and setup scene
+2. **Start Surgery**: Connect WebSocket and begin telemetry streaming
+3. **Active Phase**: Track tool movements and surgical events
+4. **Completion**: Send FINISH event and process AI analysis
+5. **Results**: Display performance metrics and feedback
+
+<Tip>
+  The simulation state is managed through React hooks and Babylon.js observables for seamless integration.
+</Tip>
+
+## Browser Compatibility
+
+The simulation requires:
+
+- WebGL 2.0 support
+- Modern browser (Chrome 90+, Firefox 88+, Safari 14+)
+- Minimum 4GB RAM
+- GPU acceleration recommended
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Real-Time Telemetry" href="/features/real-time-telemetry">
+    Learn how movement data is captured and transmitted
+  </Card>
+  <Card title="AI Analysis" href="/features/ai-analysis">
+    Explore the AI pipeline that evaluates performance
+  </Card>
+</CardGroup>

@@ -1,0 +1,347 @@
+---
+title: "Real-Time Telemetry"
+description: "WebSocket-based streaming of surgical movements and events for live performance tracking"
+---
+
+## Overview
+
+Justina captures and transmits surgical telemetry data in real-time using WebSocket connections. Every movement of the surgical instrument, along with critical events like hemorrhages and tumor contacts, is streamed to the backend for analysis and storage.
+
+<Note>
+  Telemetry data is transmitted at ~60 FPS during active simulations, providing high-resolution movement tracking.
+</Note>
+
+## WebSocket Architecture
+
+### Connection Endpoint
+
+The simulation establishes a persistent bidirectional connection to:
+
+```
+ws://[backend-url]/ws/simulation?token=[jwt-token]
+```
+
+<Accordion title="Authentication Flow">
+  WebSocket connections are authenticated using JWT tokens passed as query parameters:
+  
+  ```typescript
+  const token = getTokenFromCookies();
+  websocketRef.current = new WebSocket(
+    `${WS_URL}/ws/simulation?token=${token}`
+  );
+  ```
+  
+  The backend `HandshakeInterceptorImpl` validates the token and extracts the surgeon ID before allowing the connection.
+</Accordion>
+
+### Backend Configuration
+
+WebSocket handlers are registered in the Spring Boot configuration:
+
+```java
+@Configuration
+@EnableWebSocket
+@RequiredArgsConstructor
+public class WebSocketConfig implements WebSocketConfigurer {
+
+    private final SimulationWebSocketHandler simulationHandler;
+    private final HandshakeInterceptorImpl handshakeInterceptor;
+
+    @Override
+    public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
+        registry.addHandler(simulationHandler, "/ws/simulation")
+                .addInterceptors(handshakeInterceptor)
+                .setAllowedOrigins("*");
+    }
+}
+```
+
+## Telemetry Data Structure
+
+### Frontend Message Format
+
+Each telemetry message contains:
+
+```typescript
+const telemetry = {
+  coordinates: [x, y, z],  // 3D position of surgical instrument
+  event: evento,            // Surgical event type
+  timestamp: Date.now()     // Millisecond timestamp
+};
+
+websocketRef.current.send(JSON.stringify(telemetry));
+```
+
+### Backend DTO Validation
+
+Incoming messages are validated using Jakarta Bean Validation:
+
+```java
+public record TelemetryDTO(
+
+    @NotNull(message = "Las coordenadas son obligatorias")
+    @NotEmpty(message = "Debe haber al menos una coordenada")
+    @Size(min = 2, max = 3, message = "Coordinates debe tener 2 o 3 valores")
+    double[] coordinates,
+
+    @NotNull(message = "El evento es obligatorio")
+    SurgeryEvent event,
+
+    @Positive(message = "El timestamp debe ser positivo")
+    long timestamp
+) {}
+```
+
+<Tip>
+  Invalid telemetry messages cause the WebSocket connection to close with `CloseStatus.BAD_DATA`, ensuring data integrity.
+</Tip>
+
+## Surgical Events
+
+The system tracks five types of surgical events:
+
+```java
+public enum SurgeryEvent {
+    NONE,          // Regular movement without special event
+    TUMOR_TOUCH,   // Instrument contacted tumor tissue
+    HEMORRHAGE,    // Arterial or vascular damage detected
+    START,         // Simulation began
+    FINISH         // Simulation completed
+}
+```
+
+### Event Triggering
+
+<CardGroup cols={2}>
+  <Card title="START" icon="play">
+    Sent when user clicks "INICIAR CIRUGÍA" button
+  </Card>
+  <Card title="TUMOR_TOUCH" icon="hand-dots">
+    Triggered by collision detection with tumor fragments
+  </Card>
+  <Card title="HEMORRHAGE" icon="droplet">
+    Fired when scalpel intersects arterial mesh
+  </Card>
+  <Card title="FINISH" icon="flag-checkered">
+    Transmitted when user ends simulation or completes tumor removal
+  </Card>
+</CardGroup>
+
+### Event Transmission Example
+
+```typescript
+function enviarEvento(x: number, y: number, z: number, evento = "NONE") {
+  if (!websocketRef.current || websocketRef.current.readyState !== WebSocket.OPEN) {
+    console.warn("WebSocket not open - event not sent:", evento);
+    return;
+  }
+
+  const telemetry = {
+    coordinates: [x, y, z],
+    event: evento,
+    timestamp: Date.now()
+  };
+
+  websocketRef.current.send(JSON.stringify(telemetry));
+}
+```
+
+## Backend Message Processing
+
+The `SimulationWebSocketHandler` processes incoming telemetry:
+
+```java
+@Override
+public void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
+    // Parse JSON to DTO
+    TelemetryDTO dto = objectMapper.readValue(message.getPayload(), TelemetryDTO.class);
+
+    // Validate constraints
+    Set<ConstraintViolation<TelemetryDTO>> violations = validator.validate(dto);
+    if (!violations.isEmpty()) {
+        session.close(CloseStatus.BAD_DATA);
+        return;
+    }
+
+    // Map to domain model
+    Movement movement = new Movement(
+        dto.coordinates(),
+        dto.event(),
+        dto.timestamp()
+    );
+
+    // Retrieve surgeon identity
+    UUID surgeonId = (UUID) session.getAttributes().get("SURGEON_ID");
+    if (surgeonId == null) {
+        session.close(CloseStatus.POLICY_VIOLATION);
+        return;
+    }
+
+    // Get or create surgery session
+    SurgerySession surgery = activeSessions.computeIfAbsent(session.getId(), k -> {
+        return new SurgerySession(surgeonId);
+    });
+
+    // Add movement to session
+    surgery.addMovement(movement);
+
+    // Persist on FINISH event
+    if (movement.event() == SurgeryEvent.FINISH) {
+        surgery.endSurgery();
+        surgeryRepository.save(surgery);
+        activeSessions.remove(session.getId());
+
+        String response = String.format(
+            "{\"status\":\"SAVED\", \"surgeryId\":\"%s\"}",
+            surgery.getId()
+        );
+        session.sendMessage(new TextMessage(response));
+        AIWebSocketHandler.notificarNuevaCirugia(surgery.getId());
+    }
+}
+```
+
+## Movement Data Model
+
+Each movement is stored as a domain record:
+
+```java
+public record Movement (
+    double[] coordinates,  // [x, y] or [x, y, z]
+    SurgeryEvent event,
+    long timestamp
+) {}
+```
+
+<Note>
+  Movements are aggregated into `SurgerySession` objects that represent complete surgical procedures.
+</Note>
+
+## Session Management
+
+### Active Sessions
+
+The handler maintains a concurrent map of active surgeries:
+
+```java
+private final Map<String, SurgerySession> activeSessions = new ConcurrentHashMap<>();
+```
+
+### Session Lifecycle
+
+1. **Connection Established**: WebSocket opens, surgeon authenticated
+2. **START Event**: New `SurgerySession` created and stored
+3. **Movement Stream**: Continuous telemetry added to session
+4. **FINISH Event**: Session persisted to database and removed from memory
+5. **AI Notification**: Analysis pipeline triggered
+
+## Server Response Format
+
+When a simulation completes, the server responds:
+
+```json
+{
+  "status": "SAVED",
+  "surgeryId": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+The frontend receives this message and initiates AI analysis polling:
+
+```typescript
+websocketRef.current.onmessage = (event) => {
+  const message = JSON.parse(event.data);
+
+  if (message.status === "SAVED") {
+    const surgeryId = message.surgeryId;
+    document.cookie = `lastSurgeryId=${surgeryId}; path=/; max-age=86400`;
+    
+    consultarTrayectoria(surgeryId).then(() => {
+      iniciarPollingAnalisis(surgeryId);
+      websocketRef.current?.close();
+    });
+  }
+};
+```
+
+## Connection States
+
+WebSocket connections progress through states:
+
+<CardGroup cols={4}>
+  <Card title="CONNECTING" icon="spinner">
+    Initial handshake in progress
+  </Card>
+  <Card title="OPEN" icon="circle-check">
+    Ready to send/receive data
+  </Card>
+  <Card title="CLOSING" icon="circle-xmark">
+    Shutdown initiated
+  </Card>
+  <Card title="CLOSED" icon="circle">
+    Connection terminated
+  </Card>
+</CardGroup>
+
+## Error Handling
+
+### Frontend Error Management
+
+```typescript
+websocketRef.current.onerror = (error) => {
+  console.error("WebSocket error:", error);
+};
+
+websocketRef.current.onclose = () => {
+  console.log("WebSocket disconnected");
+};
+```
+
+### Backend Validation Failures
+
+- **Invalid Data**: Connection closed with `BAD_DATA` status
+- **Missing Authentication**: Connection closed with `POLICY_VIOLATION`
+- **Constraint Violations**: DTO validation errors trigger immediate disconnect
+
+## Performance Characteristics
+
+<Accordion title="Message Frequency">
+  - **Movement Events**: ~60 messages/second during active use
+  - **Collision Events**: Variable based on surgical precision
+  - **Control Events**: 1 START + 1 FINISH per simulation
+</Accordion>
+
+<Accordion title="Data Volume">
+  Typical 5-minute simulation:
+  - ~18,000 movement data points
+  - ~200 bytes per message
+  - ~3.6 MB total telemetry data
+</Accordion>
+
+## Security Features
+
+<CardGroup cols={2}>
+  <Card title="JWT Authentication" icon="shield">
+    All connections require valid surgeon tokens
+  </Card>
+  <Card title="Origin Validation" icon="globe">
+    Configurable CORS policy for WebSocket endpoints
+  </Card>
+  <Card title="Session Isolation" icon="users">
+    Each surgeon's data stored separately by surgeon ID
+  </Card>
+  <Card title="Validation Layer" icon="check">
+    Jakarta Bean Validation prevents malformed data injection
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="3D Simulation" href="/features/simulation">
+    Learn about the Babylon.js simulation engine
+  </Card>
+  <Card title="AI Analysis" href="/features/ai-analysis">
+    See how telemetry data is analyzed by the AI pipeline
+  </Card>
+</CardGroup>

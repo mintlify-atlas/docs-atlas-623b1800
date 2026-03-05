@@ -1,0 +1,399 @@
+---
+title: Docker Deployment
+description: Deploy Justina using Docker and Docker Compose
+---
+
+Docker provides the easiest way to deploy the complete Justina platform. This guide covers both single-container deployment and multi-service orchestration with Docker Compose.
+
+## Prerequisites
+
+Ensure you have Docker installed:
+
+```bash
+# Verify Docker installation
+docker --version
+docker-compose --version
+```
+
+<Note>
+  See the [Prerequisites](/deployment/prerequisites) page for installation instructions.
+</Note>
+
+## Backend Docker Deployment
+
+### Build Backend Image
+
+The backend includes a Dockerfile based on Eclipse Temurin Java 21:
+
+```dockerfile backend/Dockerfile
+# Base image with Java 21
+FROM eclipse-temurin:21-jdk
+
+# Working directory inside container
+WORKDIR /app
+
+# Copy project files
+COPY . .
+
+# Give permissions to Maven wrapper
+RUN chmod +x mvnw
+
+# Build the application
+RUN ./mvnw clean package -DskipTests
+
+# Expose port
+EXPOSE 8080
+
+# Start command
+CMD ["sh", "-c", "java -jar target/*.jar --server.port=${PORT}"]
+```
+
+<Steps>
+  <Step title="Navigate to Backend Directory">
+    ```bash
+    cd backend
+    ```
+  </Step>
+
+  <Step title="Build Docker Image">
+    ```bash
+    docker build -t justina-backend:latest .
+    ```
+    
+    This process:
+    - Downloads Java 21 base image
+    - Copies source code
+    - Runs Maven build
+    - Creates optimized production image
+  </Step>
+
+  <Step title="Run Backend Container">
+    ```bash
+    docker run -p 8080:8080 \
+      -e JWT_SECRET_KEY=your-secret-key \
+      -e SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/justina \
+      -e SPRING_DATASOURCE_USERNAME=postgres \
+      -e SPRING_DATASOURCE_PASSWORD=password \
+      justina-backend:latest
+    ```
+  </Step>
+</Steps>
+
+### Run with H2 Database (Development)
+
+For quick testing without PostgreSQL:
+
+```bash
+docker run -p 8080:8080 \
+  -e JWT_SECRET_KEY=dev-secret-key \
+  justina-backend:latest
+```
+
+<Warning>
+  H2 database data is lost when the container stops. Only use for development.
+</Warning>
+
+## Docker Compose Deployment (Recommended)
+
+Docker Compose orchestrates all services together, including the database.
+
+### Complete docker-compose.yml
+
+Create `docker-compose.yml` in your project root:
+
+```yaml docker-compose.yml
+version: '3.8'
+
+services:
+  justina-backend:
+    build: ./backend
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - JWT_SECRET_KEY=your-secret-key-here
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/justina
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=postgres
+      - SPRING_DATASOURCE_DRIVER_CLASS_NAME=org.postgresql.Driver
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      - SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT=org.hibernate.dialect.PostgreSQLDialect
+    depends_on:
+      - postgres
+    networks:
+      - justina-network
+
+  postgres:
+    image: postgres:15
+    environment:
+      - POSTGRES_DB=justina
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - justina-network
+
+volumes:
+  postgres-data:
+
+networks:
+  justina-network:
+    driver: bridge
+```
+
+### Deploy with Docker Compose
+
+<Steps>
+  <Step title="Start All Services">
+    ```bash
+    docker-compose up -d
+    ```
+    
+    This command:
+    - Builds backend image if not exists
+    - Pulls PostgreSQL 15 image
+    - Creates network and volumes
+    - Starts all services in detached mode
+  </Step>
+
+  <Step title="View Logs">
+    ```bash
+    # All services
+    docker-compose logs -f
+    
+    # Specific service
+    docker-compose logs -f justina-backend
+    ```
+  </Step>
+
+  <Step title="Verify Services">
+    ```bash
+    # Check running containers
+    docker-compose ps
+    
+    # Check backend health
+    curl http://localhost:8080/swagger-ui/index.html
+    ```
+  </Step>
+</Steps>
+
+### Management Commands
+
+<CodeGroup>
+```bash Start Services
+# Start in foreground
+docker-compose up
+
+# Start in background (detached)
+docker-compose up -d
+
+# Rebuild and start
+docker-compose up --build
+```
+
+```bash Stop Services
+# Stop containers (preserves data)
+docker-compose stop
+
+# Stop and remove containers (preserves volumes)
+docker-compose down
+
+# Stop and remove everything including volumes
+docker-compose down -v
+```
+
+```bash View Information
+# List running services
+docker-compose ps
+
+# View logs
+docker-compose logs -f
+
+# View resource usage
+docker stats
+```
+</CodeGroup>
+
+## Multi-Service Compose with Frontend and AI
+
+Complete deployment including frontend and AI service:
+
+```yaml docker-compose.full.yml
+version: '3.8'
+
+services:
+  justina-backend:
+    build: ./backend
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/justina
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD}
+      - SPRING_DATASOURCE_DRIVER_CLASS_NAME=org.postgresql.Driver
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      - SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT=org.hibernate.dialect.PostgreSQLDialect
+    depends_on:
+      - postgres
+    networks:
+      - justina-network
+
+  justina-frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://justina-backend:8080
+    depends_on:
+      - justina-backend
+    networks:
+      - justina-network
+
+  justina-ai:
+    build: ./ia
+    environment:
+      - BACKEND_URL=http://justina-backend:8080
+      - IA_USERNAME=ia_justina
+      - IA_PASSWORD=${IA_PASSWORD}
+    depends_on:
+      - justina-backend
+    networks:
+      - justina-network
+
+  postgres:
+    image: postgres:15
+    environment:
+      - POSTGRES_DB=justina
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - justina-network
+
+volumes:
+  postgres-data:
+
+networks:
+  justina-network:
+    driver: bridge
+```
+
+Create `.env` file:
+
+```bash .env
+JWT_SECRET_KEY=your-secure-secret-key
+DB_PASSWORD=your-database-password
+IA_PASSWORD=your-ai-password
+```
+
+Deploy:
+
+```bash
+docker-compose -f docker-compose.full.yml --env-file .env up -d
+```
+
+## Production Best Practices
+
+<Steps>
+  <Step title="Use Environment Files">
+    Never hardcode secrets in docker-compose.yml:
+    
+    ```yaml
+    environment:
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+    ```
+  </Step>
+
+  <Step title="Persist Data with Volumes">
+    Always use named volumes for databases:
+    
+    ```yaml
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ```
+  </Step>
+
+  <Step title="Health Checks">
+    Add health checks to ensure services are ready:
+    
+    ```yaml
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    ```
+  </Step>
+
+  <Step title="Resource Limits">
+    Set memory and CPU limits:
+    
+    ```yaml
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+    ```
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+<Accordion title="Container won't start">
+  Check logs for errors:
+  ```bash
+  docker-compose logs justina-backend
+  ```
+  
+  Common issues:
+  - Port already in use (change port mapping)
+  - Missing environment variables
+  - Database connection failed
+</Accordion>
+
+<Accordion title="Cannot connect to database">
+  Verify network connectivity:
+  ```bash
+  docker-compose exec justina-backend ping postgres
+  ```
+  
+  Check database is running:
+  ```bash
+  docker-compose ps postgres
+  ```
+</Accordion>
+
+<Accordion title="Build fails">
+  Clear build cache and rebuild:
+  ```bash
+  docker-compose build --no-cache
+  ```
+</Accordion>
+
+<Accordion title="Out of disk space">
+  Clean up unused Docker resources:
+  ```bash
+  docker system prune -a
+  docker volume prune
+  ```
+</Accordion>
+
+## Next Steps
+
+- Configure [Environment Variables](/deployment/environment-variables) properly
+- Set up monitoring and logging
+- Configure reverse proxy (Nginx/Traefik)
+- Enable SSL/TLS certificates
+- Implement automated backups
+
+For manual deployment without Docker, see:
+- [Backend Deployment](/deployment/backend)
+- [Frontend Deployment](/deployment/frontend)
+- [AI Service Deployment](/deployment/ai-service)

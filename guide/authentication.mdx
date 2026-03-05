@@ -1,0 +1,288 @@
+---
+title: Authentication
+description: Learn how to register and log in to the Justina surgical simulation platform
+---
+
+## Overview
+
+Justina uses a secure JWT-based authentication system with role-based access control. The platform supports two primary user roles: **Surgeons** (ROLE_SURGEON) and **AI Systems** (ROLE_IA).
+
+## Default Credentials
+
+The platform comes with pre-configured default accounts for testing:
+
+| Username | Password | Role |
+|----------|----------|------|
+| `surgeon_master` | `justina2024` | ROLE_SURGEON |
+| `ia_justina` | `ia_secret_2024` | ROLE_IA |
+
+<Warning>
+  These are default credentials for development. **Always change these passwords in production environments!**
+</Warning>
+
+## Registering a New Account
+
+<Steps>
+  <Step title="Navigate to Registration">
+    From the login page, click on the **"Registrarse"** (Register) link at the bottom of the form.
+  </Step>
+
+  <Step title="Enter Your Credentials">
+    Provide a unique username and a secure password. The system will validate your input.
+  </Step>
+
+  <Step title="Submit Registration">
+    Click the registration button. If successful, you'll receive a confirmation message.
+  </Step>
+</Steps>
+
+### Registration API Endpoint
+
+The registration process uses the following REST endpoint:
+
+```http
+POST /api/v1/auth/register
+Content-Type: application/json
+
+{
+  "username": "your_username",
+  "password": "your_password"
+}
+```
+
+**Successful Response:**
+```json
+{
+  "message": "Usuario registrado con éxito"
+}
+```
+
+**Error Response:**
+```json
+{
+  "error": "El usuario ya existe"
+}
+```
+
+## Logging In
+
+<Steps>
+  <Step title="Access the Login Page">
+    Navigate to the platform login page at `/login`.
+  </Step>
+
+  <Step title="Enter Credentials">
+    Input your username and password in the respective fields.
+  </Step>
+
+  <Step title="Submit Login">
+    Click **"Iniciar Sesión"** to authenticate. Upon success, you'll be redirected to the dashboard.
+  </Step>
+</Steps>
+
+### Login Implementation
+
+The frontend login form uses Next.js Server Actions:
+
+```typescript
+export async function loginAction(formData: FormData) {
+  const username = formData.get("username")?.toString();
+  const password = formData.get("password")?.toString();
+
+  if (!username || !password) {
+    redirect("/login?error=missing_credentials");
+  }
+
+  const res = await post("/api/v1/auth/login", {
+    username,
+    password,
+  });
+
+  if (res.error) {
+    redirect("/login?error=invalid_credentials");
+  }
+
+  // Store JWT token in cookie
+  const responseData = res as any;
+  if (responseData.token) {
+    (await cookies()).set({
+      name: "jwt-token",
+      value: responseData.token,
+      httpOnly: false,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 86400, // 24 hours
+    });
+  }
+
+  redirect(`/dashboard?username=${username}`);
+}
+```
+
+### Login API Endpoint
+
+```http
+POST /api/v1/auth/login
+Content-Type: application/json
+
+{
+  "username": "surgeon_master",
+  "password": "justina2024"
+}
+```
+
+**Successful Response:**
+```json
+{
+  "message": "Login exitoso",
+  "userId": "550e8400-e29b-41d4-a716-446655440000",
+  "username": "surgeon_master",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
+
+## JWT Token Details
+
+### Token Storage
+
+Justina stores JWT tokens in two ways:
+
+1. **HTTP-Only Cookie** (server-side security)
+   - Name: `jwt-token`
+   - Max Age: 86400 seconds (24 hours)
+   - Secure: Enabled in production
+   - SameSite: None (for cross-origin requests)
+
+2. **Response Body** (client-side access)
+   - Returned in the login response for manual handling
+
+### Using the Token
+
+Include the JWT token in API requests using the Authorization header:
+
+```http
+GET /api/v1/surgeries/123/trajectory
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+### Token Expiration
+
+Tokens expire after **24 hours**. When a token expires, you'll receive a `401 Unauthorized` response and need to log in again.
+
+## Role-Based Access Control
+
+Justina implements role-based permissions:
+
+<CardGroup cols={2}>
+  <Card title="Surgeon Role" icon="user-doctor">
+    - Access personal surgical simulations
+    - Start and complete procedures
+    - View own simulation results
+    - Cannot access other surgeons' data
+  </Card>
+
+  <Card title="AI Role" icon="robot">
+    - Receive notifications of completed surgeries
+    - Access all surgery trajectories
+    - Submit AI analysis and scoring
+    - Read-only access to simulation data
+  </Card>
+</CardGroup>
+
+### Protected Endpoints
+
+Example of role-based security configuration:
+
+```java
+@GetMapping("/{id}/trajectory")
+@Operation(
+    summary = "Obtener trayectoria de cirugía",
+    description = "Retorna los movimientos registrados durante una sesión quirúrgica"
+)
+public ResponseEntity<TrajectoryDTO> getTrajectory(
+        @PathVariable UUID id,
+        @AuthenticationPrincipal UserDetails userDetails
+) {
+    UUID authenticatedId = // extract from userDetails
+    String role = // extract role from userDetails
+    
+    TrajectoryDTO trajectory = surgeryService
+        .getSurgeryTrajectory(id, authenticatedId, role);
+    
+    return ResponseEntity.ok(trajectory);
+}
+```
+
+## Retrieving Current User Information
+
+Once authenticated, you can fetch your user profile:
+
+```http
+GET /api/v1/auth/me
+Authorization: Bearer {your-token}
+```
+
+**Response:**
+```json
+{
+  "userId": "550e8400-e29b-41d4-a716-446655440000",
+  "username": "surgeon_master",
+  "role": "ROLE_SURGEON"
+}
+```
+
+## Security Features
+
+<CardGroup cols={2}>
+  <Card title="Password Hashing" icon="lock">
+    All passwords are hashed using **BCrypt** before storage. Plain text passwords are never stored in the database.
+  </Card>
+
+  <Card title="Secure Cookies" icon="shield">
+    JWT tokens are stored in **HttpOnly cookies** to prevent XSS attacks. The Secure flag is enabled in production.
+  </Card>
+
+  <Card title="CORS Protection" icon="globe">
+    Cross-Origin Resource Sharing (CORS) is configured to allow only trusted frontend origins.
+  </Card>
+
+  <Card title="Token Validation" icon="check-circle">
+    Every protected endpoint validates the JWT signature and expiration before processing requests.
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+### Invalid Credentials Error
+
+If you see "Correo o contraseña incorrectos":
+- Double-check your username and password
+- Ensure caps lock is off
+- Try using the default credentials to verify system access
+
+### Token Not Found
+
+If WebSocket connections fail with "Token JWT no encontrado":
+- Ensure you're logged in
+- Check that cookies are enabled in your browser
+- Clear browser cache and log in again
+
+### 401 Unauthorized
+
+If API requests return 401:
+- Your token may have expired (24-hour limit)
+- Log out and log back in to get a fresh token
+- Verify the Authorization header is properly formatted
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Dashboard" icon="grid" href="/guide/dashboard">
+    Explore the main dashboard interface
+  </Card>
+
+  <Card title="Run Simulations" icon="play" href="/guide/running-simulations">
+    Start your first surgical simulation
+  </Card>
+</CardGroup>

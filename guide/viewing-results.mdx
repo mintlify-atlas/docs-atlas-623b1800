@@ -1,0 +1,410 @@
+---
+title: Viewing Results
+description: Learn how to view simulation results, AI analysis scores, and performance metrics
+---
+
+## Overview
+
+After completing a surgical simulation, Justina's AI system analyzes your performance and provides detailed feedback. The platform tracks every movement, event, and outcome to generate comprehensive reports.
+
+## How Results are Generated
+
+<Steps>
+  <Step title="Simulation Completion">
+    When you click **"TERMINAR CIRUGÍA"**, a `FINISH` event is sent via WebSocket.
+  </Step>
+
+  <Step title="Data Persistence">
+    The backend saves your complete surgery session to the database, including:
+    - All movement coordinates
+    - Surgical events (tumor touches, hemorrhages)
+    - Start and end timestamps
+    - Session duration
+
+    ```java
+    public void endSurgery() {
+        this.endTime = LocalDateTime.now();
+        this.durationInSeconds = Duration.between(
+            startTime, 
+            endTime
+        ).getSeconds();
+    }
+    ```
+  </Step>
+
+  <Step title="AI Notification">
+    The backend notifies the AI system via dedicated WebSocket channel:
+
+    ```json
+    {
+      "event": "NEW_SURGERY",
+      "surgeryId": "550e8400-e29b-41d4-a716-446655440000"
+    }
+    ```
+  </Step>
+
+  <Step title="AI Analysis">
+    The AI system retrieves the trajectory, analyzes performance, and submits a score and feedback.
+  </Step>
+
+  <Step title="Results Display">
+    The frontend polls for results and displays them automatically once available.
+  </Step>
+</Steps>
+
+## Viewing Results During Simulation
+
+### In-Scene Results Panel
+
+After completing a simulation, results appear automatically in a blue overlay panel:
+
+```typescript
+function mostrarAnalisisUI(score: number, feedback: string) {
+  if (analysisPanel && scoreText && feedbackText) {
+    scoreText.text = `PUNTUACIÓN IA: ${score.toFixed(1)}/100`;
+    feedbackText.text = `FEEDBACK: ${feedback}`;
+    analysisPanel.isVisible = true;
+  }
+}
+```
+
+**Panel Contents:**
+- **Title**: "RESULTADO DE IA JUSTINA"
+- **Score**: Numerical score out of 100
+- **Feedback**: Detailed AI-generated commentary
+- **Close Button**: Dismiss the panel
+
+<Note>
+  The results panel appears on the left side of the simulation screen. If results don't appear immediately, the system is waiting for AI analysis (polling every 5 seconds).
+</Note>
+
+### Automatic Polling
+
+The frontend automatically checks for AI results:
+
+```typescript
+function iniciarPollingAnalisis(surgeryId: string) {
+  console.log("Starting polling for AI analysis...");
+
+  pollingInterval = setInterval(async () => {
+    const data = await consultarTrayectoria(surgeryId);
+
+    if (data && data.score !== null && data.feedback !== null) {
+      console.log("AI Analysis received!");
+      mostrarAnalisisUI(data.score, data.feedback);
+      clearInterval(pollingInterval);
+    } else {
+      console.log("Waiting for AI analysis...");
+    }
+  }, 5000); // Every 5 seconds
+}
+```
+
+## Accessing Historical Results
+
+### Using the Reports Module
+
+From the dashboard, access historical simulation data:
+
+<Steps>
+  <Step title="Navigate to Reports">
+    Click the **"Reportes"** card on the dashboard.
+
+    ```typescript
+    {
+      id: "reports",
+      title: "Reportes",
+      description: "Visualiza y analiza los resultados de simulaciones anteriores",
+      icon: FileText,
+      color: "green",
+      available: true
+    }
+    ```
+  </Step>
+
+  <Step title="Browse Simulations">
+    View a list of your completed surgical simulations with basic metadata.
+  </Step>
+
+  <Step title="Select a Surgery">
+    Click on a specific simulation to view detailed results.
+  </Step>
+</Steps>
+
+### Trajectory API Endpoint
+
+Programmatically retrieve simulation results:
+
+```http
+GET /api/v1/surgeries/{surgeryId}/trajectory
+Authorization: Bearer {your-jwt-token}
+```
+
+**Response:**
+```json
+{
+  "surgeryId": "550e8400-e29b-41d4-a716-446655440000",
+  "startTime": "2026-03-05T10:30:00",
+  "endTime": "2026-03-05T10:42:15",
+  "movements": [
+    {
+      "coordinates": [2.34, 1.56, 0.89],
+      "event": "START",
+      "timestamp": 1737849000000
+    },
+    {
+      "coordinates": [2.41, 1.60, 0.92],
+      "event": "TUMOR_TOUCH",
+      "timestamp": 1737849015000
+    },
+    {
+      "coordinates": [3.12, 1.45, 1.10],
+      "event": "HEMORRHAGE",
+      "timestamp": 1737849045000
+    },
+    {
+      "coordinates": [2.89, 1.58, 0.95],
+      "event": "FINISH",
+      "timestamp": 1737849735000
+    }
+  ],
+  "score": 72.5,
+  "feedback": "Good tumor removal technique. However, accidental artery contact reduced overall score. Focus on precision near vascular structures."
+}
+```
+
+### Backend Service Logic
+
+The trajectory retrieval includes permission validation:
+
+```java
+public TrajectoryDTO getSurgeryTrajectory(
+    UUID surgeryId, 
+    UUID authenticatedSurgeonId, 
+    String role
+) {
+    // Find surgery or throw 404
+    SurgerySession session = surgeryRepository.findById(surgeryId)
+        .orElseThrow(() -> new SurgeryNotFoundException(
+            "La cirugía con id " + surgeryId + " no existe."
+        ));
+
+    // Validate permissions (surgeon can only see own data, AI sees all)
+    if (!session.getSurgeonId().equals(authenticatedSurgeonId) 
+        && !"ROLE_AI".equals(role)) {
+        throw new ForbiddenActionException(
+            "No tienes permiso para acceder a esta cirugía."
+        );
+    }
+
+    // Map to DTO
+    return new TrajectoryDTO(
+        session.getId(),
+        session.getStartTime(),
+        session.getEndTime(),
+        session.getTrajectory(),
+        session.getScore(),
+        session.getFeedback()
+    );
+}
+```
+
+## Understanding Your Score
+
+### Score Components
+
+Your AI-generated score is based on multiple factors:
+
+<CardGroup cols={2}>
+  <Card title="Tumor Removal" icon="bullseye">
+    Completeness and efficiency of tumor fragment removal. More complete removal = higher score.
+  </Card>
+
+  <Card title="Precision" icon="crosshairs">
+    Movement smoothness and accuracy. Erratic movements reduce the score.
+  </Card>
+
+  <Card title="Safety" icon="shield-halved">
+    Avoidance of critical structures (arteries). Hemorrhage events significantly reduce score.
+  </Card>
+
+  <Card title="Time Efficiency" icon="clock">
+    Procedure duration relative to optimal time. Faster (without sacrificing safety) is better.
+  </Card>
+</CardGroup>
+
+### Score Ranges
+
+| Score Range | Performance Level | Description |
+|-------------|-------------------|-------------|
+| 90-100 | Excellent | Outstanding performance with minimal errors |
+| 75-89 | Good | Solid technique with minor improvements needed |
+| 60-74 | Satisfactory | Acceptable but requires practice in specific areas |
+| 40-59 | Needs Improvement | Significant errors; review fundamentals |
+| 0-39 | Poor | Critical mistakes; extensive training recommended |
+
+## AI Feedback Analysis
+
+The AI system provides textual feedback addressing:
+
+1. **Strengths**: What you did well
+2. **Weaknesses**: Areas requiring improvement
+3. **Critical Events**: Hemorrhages or other major issues
+4. **Recommendations**: Specific training suggestions
+
+**Example Feedback:**
+```
+Good tumor removal technique with 92% completion rate. 
+However, accidental artery contact at timestamp 1737849045000 
+reduced overall score. Focus on improving precision near 
+vascular structures. Consider reducing instrument speed when 
+approaching critical anatomy.
+```
+
+## Data Structure
+
+### SurgerySession Model
+
+The complete surgery data structure:
+
+```java
+public class SurgerySession {
+    private UUID id;
+    private UUID surgeonId;
+    private List<Movement> trajectory;
+    private LocalDateTime startTime;
+    private LocalDateTime endTime;
+    private Long durationInSeconds;
+    private Double score;           // AI-assigned score (0-100)
+    private String feedback;        // AI-generated feedback
+
+    public void updateAnalysis(Double score, String feedback) {
+        this.score = score;
+        this.feedback = feedback;
+    }
+}
+```
+
+### Movement Record
+
+```java
+public record Movement(
+    double[] coordinates,  // [x, y, z]
+    SurgeryEvent event,    // START, TUMOR_TOUCH, HEMORRHAGE, FINISH
+    long timestamp         // Unix timestamp
+) {}
+```
+
+## How AI Submits Analysis
+
+### AI Analysis Endpoint
+
+The AI system uses this endpoint to submit results:
+
+```http
+POST /api/v1/surgeries/{surgeryId}/analysis
+Authorization: Bearer {ai-system-token}
+Content-Type: application/json
+
+{
+  "score": 72.5,
+  "feedback": "Good tumor removal technique. However, accidental artery contact reduced overall score."
+}
+```
+
+### Backend Processing
+
+```java
+public void saveAiAnalysis(UUID surgeryId, AnalysisDTO analysis) {
+    // Find surgery session
+    SurgerySession session = surgeryRepository.findById(surgeryId)
+        .orElseThrow(() -> new SurgeryNotFoundException(
+            "La cirugía con id " + surgeryId + " no existe."
+        ));
+
+    // Update with AI results
+    session.updateAnalysis(analysis.score(), analysis.feedback());
+
+    // Persist to database
+    surgeryRepository.save(session);
+}
+```
+
+## Analytics Module
+
+For aggregate performance tracking:
+
+<Steps>
+  <Step title="Navigate to Analytics">
+    Click the **"Análisis de Datos"** card on the dashboard.
+
+    ```typescript
+    {
+      id: "analytics",
+      title: "Análisis de Datos",
+      description: "Métricas y estadísticas de rendimiento de los robots",
+      icon: BarChart3,
+      color: "purple",
+      available: true
+    }
+    ```
+  </Step>
+
+  <Step title="View Performance Trends">
+    Access visualizations of:
+    - Average scores over time
+    - Improvement trajectories
+    - Common error patterns
+    - Procedure duration trends
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### Results Not Appearing
+
+**Issue**: The results panel doesn't show after finishing surgery.
+
+**Solutions**:
+- Wait up to 30 seconds for AI analysis to complete
+- Check browser console for WebSocket errors
+- Verify your internet connection is stable
+- Refresh the page and check Reports module
+
+### Permission Denied Error
+
+**Issue**: "No tienes permiso para acceder a esta cirugía"
+
+**Cause**: You're trying to access another surgeon's simulation data.
+
+**Solution**: Only access simulations you personally completed. AI-role accounts can access all data.
+
+### Missing Score or Feedback
+
+**Issue**: Trajectory returned but `score` and `feedback` are `null`.
+
+**Cause**: AI analysis not yet completed.
+
+**Solution**: The frontend will continue polling. If it persists beyond 2 minutes, contact support.
+
+## Best Practices
+
+<Note>
+  - **Review results immediately** after each simulation while the experience is fresh
+  - **Track your progress** by comparing scores across multiple sessions
+  - **Focus on specific weaknesses** highlighted in AI feedback
+  - **Practice regularly** to see measurable improvement
+  - **Analyze trajectories** to understand movement patterns
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Dashboard Overview" icon="grid" href="/guide/dashboard">
+    Learn about all dashboard modules
+  </Card>
+
+  <Card title="Run New Simulation" icon="play" href="/guide/running-simulations">
+    Practice with another surgical procedure
+  </Card>
+</CardGroup>

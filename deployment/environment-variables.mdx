@@ -1,0 +1,256 @@
+---
+title: Environment Variables
+description: Configuration guide for all environment variables across Justina services
+---
+
+Justina uses environment variables for configuration across all services. This guide documents all available environment variables for the Backend, Frontend, and AI Service.
+
+## Backend Environment Variables
+
+### Required Variables
+
+<Note>
+  These variables must be set for the backend to function properly.
+</Note>
+
+| Variable | Description | Required | Default |
+|----------|-------------|----------|----------|
+| `JWT_SECRET_KEY` | Secret key for signing JWT tokens | **Yes** | None |
+| `PORT` | Server port | No | `8080` |
+
+### Database Configuration
+
+#### Development (H2 Database)
+
+For local development, the backend uses H2 in-memory database by default:
+
+```bash
+SPRING_DATASOURCE_URL=jdbc:h2:mem:justina
+SPRING_DATASOURCE_USERNAME=sa
+SPRING_DATASOURCE_PASSWORD=
+SPRING_DATASOURCE_DRIVER_CLASS_NAME=org.h2.Driver
+SPRING_JPA_HIBERNATE_DDL_AUTO=create-drop
+SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT=org.hibernate.dialect.H2Dialect
+```
+
+<Warning>
+  H2 database is **only suitable for development**. All data is lost when the application restarts.
+</Warning>
+
+#### Production (PostgreSQL)
+
+For production deployments, configure PostgreSQL:
+
+```bash
+SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/justina
+SPRING_DATASOURCE_USERNAME=your_username
+SPRING_DATASOURCE_PASSWORD=your_password
+SPRING_DATASOURCE_DRIVER_CLASS_NAME=org.postgresql.Driver
+SPRING_JPA_HIBERNATE_DDL_AUTO=update
+SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT=org.hibernate.dialect.PostgreSQLDialect
+```
+
+### Database Variables Reference
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `SPRING_DATASOURCE_URL` | JDBC connection URL | `jdbc:h2:mem:justina` |
+| `SPRING_DATASOURCE_USERNAME` | Database username | `sa` |
+| `SPRING_DATASOURCE_PASSWORD` | Database password | Empty string |
+| `SPRING_DATASOURCE_DRIVER_CLASS_NAME` | JDBC driver class | `org.h2.Driver` |
+| `SPRING_JPA_HIBERNATE_DDL_AUTO` | Schema generation strategy | `create-drop` |
+| `SPRING_JPA_SHOW_SQL` | Show SQL queries in logs | `false` |
+| `SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT` | Hibernate SQL dialect | `org.hibernate.dialect.H2Dialect` |
+
+### Optional Backend Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `SPRING_JPA_SHOW_SQL` | Log SQL queries | `false` |
+
+## Frontend Environment Variables
+
+The Next.js frontend uses environment variables for API configuration.
+
+### Required Variables
+
+```bash
+NEXT_PUBLIC_API_URL=http://localhost:8080
+```
+
+| Variable | Description | Required | Default |
+|----------|-------------|----------|----------|
+| `NEXT_PUBLIC_API_URL` | Backend API base URL | Yes | `http://localhost:8080` |
+
+<Note>
+  Variables prefixed with `NEXT_PUBLIC_` are exposed to the browser. Never use this prefix for secrets.
+</Note>
+
+### Build Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PORT` | Development server port | `3000` |
+| `NODE_ENV` | Environment mode | `development` |
+
+## AI Service Environment Variables
+
+The Python AI service requires configuration for backend connectivity and authentication.
+
+### Required Variables
+
+```bash
+BACKEND_URL=http://localhost:8080
+IA_USERNAME=ia_justina
+IA_PASSWORD=ia_secret_2024
+```
+
+| Variable | Description | Required | Default |
+|----------|-------------|----------|----------|
+| `BACKEND_URL` | Backend API base URL | Yes | `http://localhost:8080` |
+| `IA_USERNAME` | AI service username | Yes | `ia_justina` |
+| `IA_PASSWORD` | AI service password | Yes | `ia_secret_2024` |
+
+<Warning>
+  Change the default `IA_PASSWORD` in production environments!
+</Warning>
+
+### Optional AI Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `REQUEST_TIMEOUT` | HTTP request timeout (seconds) | `10` |
+| `RETRY_ATTEMPTS` | Number of retry attempts | `3` |
+| `PORT` | Health check server port | `8000` |
+
+## Configuration Examples
+
+### Example .env File Structure
+
+<CodeGroup>
+```bash Development
+# Backend
+JWT_SECRET_KEY=dev-secret-key-change-in-production
+PORT=8080
+SPRING_DATASOURCE_URL=jdbc:h2:mem:justina
+SPRING_DATASOURCE_USERNAME=sa
+SPRING_DATASOURCE_PASSWORD=
+SPRING_JPA_SHOW_SQL=true
+
+# Frontend
+NEXT_PUBLIC_API_URL=http://localhost:8080
+
+# AI Service
+BACKEND_URL=http://localhost:8080
+IA_USERNAME=ia_justina
+IA_PASSWORD=ia_secret_2024
+```
+
+```bash Production
+# Backend
+JWT_SECRET_KEY=your-secure-random-secret-key-min-256-bits
+PORT=8080
+SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/justina
+SPRING_DATASOURCE_USERNAME=justina_user
+SPRING_DATASOURCE_PASSWORD=secure_db_password
+SPRING_DATASOURCE_DRIVER_CLASS_NAME=org.postgresql.Driver
+SPRING_JPA_HIBERNATE_DDL_AUTO=update
+SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT=org.hibernate.dialect.PostgreSQLDialect
+SPRING_JPA_SHOW_SQL=false
+
+# Frontend
+NEXT_PUBLIC_API_URL=https://api.yourdomain.com
+
+# AI Service
+BACKEND_URL=https://api.yourdomain.com
+IA_USERNAME=ia_justina
+IA_PASSWORD=your-secure-ai-password
+REQUEST_TIMEOUT=30
+RETRY_ATTEMPTS=5
+```
+</CodeGroup>
+
+## Setting Environment Variables
+
+### Linux/macOS
+
+```bash
+# Export for current session
+export JWT_SECRET_KEY="your-secret-key"
+
+# Add to ~/.bashrc or ~/.zshrc for persistence
+echo 'export JWT_SECRET_KEY="your-secret-key"' >> ~/.bashrc
+```
+
+### Windows (PowerShell)
+
+```powershell
+# Set for current session
+$env:JWT_SECRET_KEY="your-secret-key"
+
+# Set permanently (system-wide)
+[System.Environment]::SetEnvironmentVariable('JWT_SECRET_KEY', 'your-secret-key', 'Machine')
+```
+
+### Docker
+
+```bash
+# Command line
+docker run -e JWT_SECRET_KEY="your-secret-key" justina-backend
+
+# Or use .env file with docker-compose
+docker-compose --env-file .env up
+```
+
+## Security Best Practices
+
+<Steps>
+  <Step title="Use Strong Secrets">
+    Generate secure random strings for `JWT_SECRET_KEY`:
+    
+    ```bash
+    # Generate 256-bit secret
+    openssl rand -base64 32
+    ```
+  </Step>
+
+  <Step title="Never Commit Secrets">
+    Add `.env` to `.gitignore`:
+    
+    ```bash .gitignore
+    .env
+    .env.local
+    .env.production
+    ```
+  </Step>
+
+  <Step title="Use Different Secrets Per Environment">
+    Maintain separate secrets for development, staging, and production.
+  </Step>
+
+  <Step title="Rotate Credentials Regularly">
+    Change passwords and secrets periodically, especially after team member changes.
+  </Step>
+</Steps>
+
+## Default Credentials
+
+The backend initializes with default users on first startup:
+
+| Username | Password | Role |
+|----------|----------|------|
+| `surgeon_master` | `justina2024` | `ROLE_SURGEON` |
+| `ia_justina` | `ia_secret_2024` | `ROLE_IA` |
+
+<Warning>
+  **Critical Security Notice**: Change these default passwords immediately in production environments!
+</Warning>
+
+## Next Steps
+
+After configuring environment variables, proceed with deployment:
+
+- [Docker Deployment](/deployment/docker) - Deploy all services with Docker Compose
+- [Backend Deployment](/deployment/backend) - Deploy backend manually
+- [Frontend Deployment](/deployment/frontend) - Deploy frontend manually
+- [AI Service Deployment](/deployment/ai-service) - Deploy AI service manually

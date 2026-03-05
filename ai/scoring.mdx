@@ -1,0 +1,299 @@
+---
+title: "Scoring & Feedback Generation"
+description: "Step 5: Converting metrics into scores and personalized recommendations"
+---
+
+Step 5 is the final stage of the analysis pipeline, where all collected metrics are synthesized into a single numerical score (0-100) and comprehensive Markdown-formatted feedback with actionable recommendations.
+
+## Function Signature
+
+```python
+def _paso5_generar_feedback(m: Dict, b: Dict, r: Dict) -> Tuple[float, str]:
+    """
+    Generates final score and feedback from metrics, benchmarking, and risk data.
+    Returns (score, feedback_markdown).
+    """
+```
+
+## Input Parameters
+
+The function receives dictionaries from the previous three steps:
+
+- **m** (metricas): Dexterity metrics from Step 2
+- **b** (benchmarking): Precision data from Step 3
+- **r** (riesgo): Risk analysis from Step 4
+
+## Scoring Algorithm
+
+The score starts at 100 and penalties are subtracted:
+
+```python analysis_pipeline.py lines
+score = 100.0
+score -= r["touches"] * 8
+score -= r["hemorrhages"] * 15
+if m["economia"] > 1.5: score -= 10
+score = max(0, min(100, score))
+```
+
+### Penalty Breakdown
+
+<AccordionGroup>
+  <Accordion title="Hemorrhages: -15 points each">
+    Hemorrhages are the most critical errors. Each bleeding event costs 15 points.
+    
+    **Rationale**: In real surgery, vascular damage is life-threatening and must be avoided at all costs.
+    
+    ```python
+    score -= r["hemorrhages"] * 15
+    ```
+  </Accordion>
+  
+  <Accordion title="Tumor Touches: -8 points each">
+    Contact with tumor tissue is a moderate error. Each touch costs 8 points.
+    
+    **Rationale**: Tumor contact can spread cancer cells, but is less immediately dangerous than hemorrhage.
+    
+    ```python
+    score -= r["touches"] * 8
+    ```
+  </Accordion>
+  
+  <Accordion title="Poor Economy: -10 points">
+    If economy of movement exceeds 1.5x (path is 50% longer than necessary), a 10-point penalty applies.
+    
+    **Rationale**: Inefficient movements indicate poor planning and increase procedure time and tissue trauma.
+    
+    ```python
+    if m["economia"] > 1.5: score -= 10
+    ```
+  </Accordion>
+</AccordionGroup>
+
+<Note>
+The final score is clamped between 0 and 100: `score = max(0, min(100, score))`
+</Note>
+
+## Performance Tiers
+
+Based on the final score, performance is classified into one of four tiers:
+
+```python
+status = ("🌟 EXCELENTE" if score >= 90 else 
+          "✅ BUENO" if score >= 75 else 
+          "⚠️ MEJORABLE" if score >= 60 else 
+          "❌ DEFICIENTE")
+```
+
+<Tabs>
+  <Tab title="🌟 EXCELENTE (90-100)">
+    **Characteristics**:
+    - Zero or one minor error
+    - Excellent economy of movement
+    - High precision
+    - Smooth, controlled technique
+    
+    **Message**: "Outstanding surgical performance. Continue this level of excellence."
+  </Tab>
+  
+  <Tab title="✅ BUENO (75-89)">
+    **Characteristics**:
+    - Minor errors present but controlled
+    - Good economy of movement
+    - Acceptable precision
+    - Generally safe technique
+    
+    **Message**: "Good performance with room for refinement."
+  </Tab>
+  
+  <Tab title="⚠️ MEJORABLE (60-74)">
+    **Characteristics**:
+    - Several errors or one critical error
+    - Moderate economy issues
+    - Needs practice to improve consistency
+    
+    **Message**: "Performance shows potential but needs improvement."
+  </Tab>
+  
+  <Tab title="❌ DEFICIENTE (<60)">
+    **Characteristics**:
+    - Multiple critical errors
+    - Poor economy of movement
+    - Unsafe technique
+    - Requires significant retraining
+    
+    **Message**: "Requires substantial practice and technique review."
+  </Tab>
+</Tabs>
+
+## Feedback Structure
+
+The feedback is formatted as Markdown with four main sections:
+
+```python
+feedback = f"""### {status} - Score: {score:.1f}/100
+
+#### 🚨 ALERTAS CRÍTICAS
+- Hemorragias: {r["hemorrhages"]} {"(REVISAR TÉCNICA)" if r["hemorrhages"] > 0 else "(Ninguna)"}
+- Contactos Tumor: {r["touches"]}
+- Cuadrantes de Riesgo: {", ".join(r["cuadrantes"]) if r["cuadrantes"] else "Ninguno"}
+
+#### 📊 MÉTRICAS DE DESTREZA
+- **Economía de Movimiento:** {m["economia"]:.2f}x (Ideal < 1.2x)
+- **Fluidez (Jerk Promedio):** {m["j_avg"]:.2f} 
+- **Precisión vs Patrón Oro:** {b["precision"]:.1f}%
+
+#### 📈 ESTADÍSTICAS
+- **Duración Total:** {m["duration"]:.1f}s
+- **Distancia Recorrida:** {m["total_dist"]:.2f} unidades
+- **Velocidad Promedio:** {m["v_avg"]:.2f} u/s
+
+#### 💡 RECOMENDACIONES
+"""
+```
+
+### 1. Critical Alerts (🚨)
+
+Highlights the most severe issues that need immediate attention:
+
+- **Hemorrhages**: Number of bleeding events with urgent flag if > 0
+- **Tumor Touches**: Count of cancerous tissue contacts
+- **Risk Quadrants**: Spatial zones where errors occurred
+
+### 2. Dexterity Metrics (📊)
+
+Key performance indicators from the physics analysis:
+
+- **Economy of Movement**: Path efficiency ratio (ideal < 1.2x)
+- **Fluidity (Average Jerk)**: Smoothness indicator
+- **Precision vs Gold Standard**: Percentage score for path accuracy
+
+### 3. Statistics (📈)
+
+Raw data about the procedure:
+
+- **Total Duration**: Time from start to finish
+- **Distance Traveled**: Total path length
+- **Average Velocity**: Mean movement speed
+
+### 4. Recommendations (💡)
+
+Conditional, personalized advice based on specific issues:
+
+```python
+if r["hemorrhages"] > 0: 
+    feedback += "- Priorizar control vascular en cuadrantes críticos.\n"
+if m["economia"] > 1.8: 
+    feedback += "- Planificar trayectorias más directas para reducir fatiga.\n"
+if b["precision"] < 70: 
+    feedback += "- Mantener mayor estabilidad en la ejecución del path ideal.\n"
+if score < 80: 
+    feedback += "- Incrementar práctica en simulador para mejorar coordinación motora.\n"
+```
+
+<Note>
+Recommendations are only added if specific conditions are met, making feedback highly personalized.
+</Note>
+
+## Complete Example Output
+
+### Input Metrics
+
+```json
+{
+  "metricas": {
+    "economia": 1.35,
+    "v_avg": 2.73,
+    "a_max": 8.42,
+    "j_avg": 0.67,
+    "total_dist": 123.45,
+    "duration": 45.3
+  },
+  "benchmarking": {
+    "desviacion_avg": 2.35,
+    "precision": 76.5
+  },
+  "riesgo": {
+    "touches": 2,
+    "hemorrhages": 1,
+    "cuadrantes": ["Sup-Der"]
+  }
+}
+```
+
+### Generated Output
+
+```python
+score = 100 - (2 * 8) - (1 * 15) = 69.0
+status = "⚠️ MEJORABLE"
+```
+
+```markdown
+### ⚠️ MEJORABLE - Score: 69.0/100
+
+#### 🚨 ALERTAS CRÍTICAS
+- Hemorragias: 1 (REVISAR TÉCNICA)
+- Contactos Tumor: 2
+- Cuadrantes de Riesgo: Sup-Der
+
+#### 📊 MÉTRICAS DE DESTREZA
+- **Economía de Movimiento:** 1.35x (Ideal < 1.2x)
+- **Fluidez (Jerk Promedio):** 0.67
+- **Precisión vs Patrón Oro:** 76.5%
+
+#### 📈 ESTADÍSTICAS
+- **Duración Total:** 45.3s
+- **Distancia Recorrida:** 123.45 unidades
+- **Velocidad Promedio:** 2.73 u/s
+
+#### 💡 RECOMENDACIONES
+- Priorizar control vascular en cuadrantes críticos.
+- Mantener mayor estabilidad en la ejecución del path ideal.
+- Incrementar práctica en simulador para mejorar coordinación motora.
+```
+
+## Recommendation Logic
+
+<CardGroup cols={2}>
+  <Card title="Hemorrhages > 0" icon="droplet">
+    "Priorizar control vascular en cuadrantes críticos."
+  </Card>
+  <Card title="Economy > 1.8" icon="route">
+    "Planificar trayectorias más directas para reducir fatiga."
+  </Card>
+  <Card title="Precision < 70%" icon="crosshairs">
+    "Mantener mayor estabilidad en la ejecución del path ideal."
+  </Card>
+  <Card title="Score < 80" icon="graduation-cap">
+    "Incrementar práctica en simulador para mejorar coordinación motora."
+  </Card>
+</CardGroup>
+
+## Clinical Value
+
+The feedback system provides:
+
+1. **Objective Scoring**: Removes subjective bias from performance evaluation
+2. **Actionable Insights**: Specific recommendations tied to measurable metrics
+3. **Progress Tracking**: Consistent scoring enables longitudinal performance monitoring
+4. **Focused Training**: Pinpoints exact areas needing improvement
+
+## Performance
+
+Feedback generation is extremely fast:
+
+- **String formatting**: Simple concatenation and f-strings
+- **Conditional logic**: Basic if statements
+- **No heavy computation**: Just assembling pre-calculated metrics
+
+Typical performance: **Less than 1ms**
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Setup AI Environment" icon="gear" href="/ai/setup">
+    Install dependencies and configure the AI service
+  </Card>
+  <Card title="Use the AI Client" icon="plug" href="/ai/client-usage">
+    Learn how to integrate with the backend API
+  </Card>
+</CardGroup>
