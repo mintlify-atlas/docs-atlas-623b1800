@@ -1,0 +1,141 @@
+{
+  "projectType": "saas",
+  "projectName": "Justina",
+  "projectDescription": "AI-powered surgical robot simulation platform with real-time telemetry analysis and performance scoring",
+  "theme": "palm",
+  "primaryColor": "#040404",
+  "lightColor": null,
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Platform",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "architecture"
+            ]
+          },
+          {
+            "group": "Features",
+            "pages": [
+              "features/simulation",
+              "features/real-time-telemetry",
+              "features/ai-analysis",
+              "features/performance-scoring"
+            ]
+          },
+          {
+            "group": "User Guide",
+            "pages": [
+              "guide/authentication",
+              "guide/running-simulations",
+              "guide/viewing-results",
+              "guide/dashboard"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Backend API",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api/overview",
+              "api/authentication"
+            ]
+          },
+          {
+            "group": "REST Endpoints",
+            "pages": [
+              "api/auth-endpoints",
+              "api/surgery-endpoints"
+            ]
+          },
+          {
+            "group": "WebSocket",
+            "pages": [
+              "api/websocket-overview",
+              "api/simulation-channel",
+              "api/ai-channel"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "AI System",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "ai/overview",
+              "ai/analysis-pipeline"
+            ]
+          },
+          {
+            "group": "Components",
+            "pages": [
+              "ai/data-ingestion",
+              "ai/dexterity-metrics",
+              "ai/benchmarking",
+              "ai/risk-analysis",
+              "ai/scoring"
+            ]
+          },
+          {
+            "group": "Integration",
+            "pages": [
+              "ai/setup",
+              "ai/client-usage"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Deployment",
+        "groups": [
+          {
+            "group": "Setup",
+            "pages": [
+              "deployment/prerequisites",
+              "deployment/environment-variables",
+              "deployment/docker"
+            ]
+          },
+          {
+            "group": "Components",
+            "pages": [
+              "deployment/backend",
+              "deployment/frontend",
+              "deployment/ai-service"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "3D surgical simulation with Babylon.js",
+    "Real-time WebSocket telemetry streaming",
+    "AI-powered surgical performance analysis",
+    "JWT-based authentication with role-based access",
+    "Automated scoring and feedback generation",
+    "Interactive dashboard with reports and analytics",
+    "Multi-component architecture (Backend, Frontend, AI)"
+  ],
+  "publicApiSurface": [
+    "POST /api/v1/auth/login",
+    "POST /api/v1/auth/register",
+    "GET /api/v1/auth/me",
+    "GET /api/v1/surgeries/{id}/trajectory",
+    "POST /api/v1/surgeries/{id}/analysis",
+    "WebSocket /ws/simulation",
+    "WebSocket /ws/ai",
+    "Python Client: JustinaAIClient",
+    "Analysis Pipeline: run_pipeline()"
+  ]
+}
